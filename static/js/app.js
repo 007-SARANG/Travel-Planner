@@ -12,8 +12,40 @@
 let sessionId = null;
 let isTyping = false;
 let currentTheme = localStorage.getItem('theme') || 'dark';
+let currentCurrency = localStorage.getItem('currency') || 'INR';
 let recognition = null;
 let travelerCount = 1;
+
+// Currency conversion rates (base: INR)
+const currencyRates = {
+    INR: 1,
+    USD: 0.012,
+    EUR: 0.011,
+    GBP: 0.0095
+};
+
+const currencySymbols = {
+    INR: '₹',
+    USD: '$',
+    EUR: '€',
+    GBP: '£'
+};
+
+// Base prices in INR
+const basePrices = {
+    flights: 15000,
+    trains: 500,
+    hotels: 2000,
+    // Destination prices in INR
+    destinations: {
+        'Bali': 45000,
+        'Paris': 85000,
+        'Maldives': 120000,
+        'Switzerland': 150000,
+        'Dubai': 35000,
+        'Tokyo': 95000
+    }
+};
 
 // Loading messages
 const loadingMessages = [
@@ -41,6 +73,7 @@ const travelFacts = [
 
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
+    initCurrency();
     initEventListeners();
     initTravelOptions();
     initDestinationsCarousel();
@@ -48,6 +81,112 @@ document.addEventListener('DOMContentLoaded', () => {
     loadRecentSearches();
     console.log('✅ TravelAI initialized');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💱 Currency Management
+// ═══════════════════════════════════════════════════════════════════════════
+
+function initCurrency() {
+    const selector = document.getElementById('currencySelect');
+    if (selector) {
+        selector.value = currentCurrency;
+        updateAllPrices();
+    }
+}
+
+function handleCurrencyChange(newCurrency) {
+    currentCurrency = newCurrency;
+    localStorage.setItem('currency', newCurrency);
+    updateAllPrices();
+    
+    // Show system message if chat is active
+    const chatContainer = document.getElementById('chatContainer');
+    if (chatContainer && chatContainer.children.length > 0) {
+        addMessage(`Currency changed to ${currencySymbols[newCurrency]} ${newCurrency}. Future prices will be in ${newCurrency}.`, 'system');
+    } else {
+        showToast(`Currency changed to ${currencySymbols[newCurrency]} ${newCurrency}`, 'success');
+    }
+}
+
+function convertPrice(priceInINR) {
+    const rate = currencyRates[currentCurrency] || 1;
+    const converted = Math.round(priceInINR * rate);
+    return formatPrice(converted);
+}
+
+function formatPrice(amount) {
+    const symbol = currencySymbols[currentCurrency] || '₹';
+    if (currentCurrency === 'INR') {
+        // Indian number formatting (lakhs, crores)
+        return symbol + amount.toLocaleString('en-IN');
+    }
+    return symbol + amount.toLocaleString('en-US');
+}
+
+function updateAllPrices() {
+    // Update feature card prices
+    updateFeatureCardPrices();
+    // Update destination card prices
+    updateDestinationPrices();
+}
+
+function updateFeatureCardPrices() {
+    // Flights card
+    const flightsCard = document.querySelector('.flights-card .card-price');
+    if (flightsCard) {
+        flightsCard.textContent = `From ${convertPrice(basePrices.flights)}`;
+        flightsCard.classList.add('price-updated');
+        setTimeout(() => flightsCard.classList.remove('price-updated'), 300);
+    }
+
+    // Trains card
+    const trainsCard = document.querySelector('.trains-card .card-price');
+    if (trainsCard) {
+        trainsCard.textContent = `From ${convertPrice(basePrices.trains)}`;
+        trainsCard.classList.add('price-updated');
+        setTimeout(() => trainsCard.classList.remove('price-updated'), 300);
+    }
+
+    // Hotels card
+    const hotelsCard = document.querySelector('.hotels-card .card-price');
+    if (hotelsCard) {
+        hotelsCard.textContent = `From ${convertPrice(basePrices.hotels)}`;
+        hotelsCard.classList.add('price-updated');
+        setTimeout(() => hotelsCard.classList.remove('price-updated'), 300);
+    }
+
+    // Weather card (no price, but update text)
+    const weatherCard = document.querySelector('.weather-card .card-price');
+    if (weatherCard) {
+        weatherCard.textContent = 'Live Updates';
+    }
+}
+
+function updateDestinationPrices() {
+    document.querySelectorAll('.destination-card').forEach(card => {
+        const destination = card.dataset.destination;
+        const priceEl = card.querySelector('.destination-price');
+        
+        if (destination && basePrices.destinations[destination]) {
+            const price = convertPrice(basePrices.destinations[destination]);
+            
+            // Add price element if not exists
+            if (!priceEl) {
+                const info = card.querySelector('.destination-info');
+                if (info) {
+                    const priceSpan = document.createElement('span');
+                    priceSpan.className = 'destination-price';
+                    priceSpan.textContent = `From ${price}`;
+                    info.insertBefore(priceSpan, info.querySelector('.explore-btn'));
+                }
+            } else {
+                priceEl.textContent = `From ${price}`;
+                priceEl.classList.add('price-updated');
+                setTimeout(() => priceEl.classList.remove('price-updated'), 300);
+            }
+        }
+    });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🎨 Theme Management
@@ -80,6 +219,11 @@ function updateThemeIcon() {
 function initEventListeners() {
     // Theme Toggle
     document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
+
+    // Currency Toggle
+    document.getElementById('currencySelect')?.addEventListener('change', (e) => {
+        handleCurrencyChange(e.target.value);
+    });
 
     // Send Message
     const sendBtn = document.getElementById('sendBtn');
