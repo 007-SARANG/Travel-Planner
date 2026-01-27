@@ -200,5 +200,7 @@ if __name__ == '__main__':
         print("\nPlease check your .env file.")
     else:
         print("[*] Starting AI Travel Planner Web Server...")
-        print("[*] Open your browser at: http://localhost:5000")
-        app.run(debug=False, host='0.0.0.0', port=5000, use_reloader=False)
+        port = int(os.getenv('PORT', 5000))
+        print(f"[*] Open your browser at: http://localhost:{port}")
+        app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
+
