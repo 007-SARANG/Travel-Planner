@@ -1,0 +1,38 @@
+# Environment variables (NEVER push to GitHub!)
+.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Vercel
+.vercel
+
+# Node (if any)
+node_modules/
+
+# Byte-compiled files
+*.pyc
