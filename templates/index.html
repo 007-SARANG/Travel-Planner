@@ -1,289 +1,204 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TravelAI ✈️ Your Intelligent Trip Planner</title>
     <meta name="description" content="AI-powered travel planning with real-time prices, instant booking links, and personalized recommendations">
-    <meta name="theme-color" content="#764ba2">
+    <meta name="theme-color" content="#1a1a2e">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Leaflet CSS for Interactive Map -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
-    <!-- Animated Background Canvas -->
-    <canvas id="particleCanvas"></canvas>
-    
-    <!-- Morphing Gradient Blobs -->
-    <div class="blob-container">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
+    <!-- Immersive Background -->
+    <div class="immersive-bg">
+        <div class="bg-overlay"></div>
     </div>
 
     <!-- Navigation -->
-    <nav class="navbar glass-nav">
+    <nav class="navbar">
         <div class="nav-container">
             <div class="logo">
                 <div class="logo-icon">
                     <i class="fas fa-globe-americas"></i>
-                    <div class="orbit-ring"></div>
                 </div>
                 <span class="logo-text">TravelAI</span>
-                <span class="logo-badge">BETA</span>
             </div>
             <div class="nav-actions">
-                <select class="currency-selector" id="currencySelect" title="Select Currency">
-                    <option value="USD">$ USD</option>
-                    <option value="INR" selected>₹ INR</option>
-                    <option value="EUR">€ EUR</option>
-                    <option value="GBP">£ GBP</option>
-                </select>
-                <button class="btn-history" id="historyToggle" title="Trip History">
+                <div class="currency-dropdown">
+                    <select class="currency-selector" id="currencySelect" title="Select Currency">
+                        <option value="INR" selected>₹ INR</option>
+                        <option value="USD">$ USD</option>
+                        <option value="EUR">€ EUR</option>
+                        <option value="GBP">£ GBP</option>
+                    </select>
+                </div>
+                <button class="nav-btn" id="historyToggle" title="Trip History">
                     <i class="fas fa-history"></i>
                 </button>
-                <button class="btn-theme" id="themeToggle" title="Toggle Theme">
+                <button class="nav-btn" id="themeToggle" title="Toggle Theme">
                     <i class="fas fa-moon"></i>
                 </button>
-                <button class="btn-new-trip magnetic-btn" id="resetBtn">
-                    <span class="btn-content">
-                        <i class="fas fa-plus"></i>
-                        <span>New Trip</span>
-                    </span>
-                    <span class="btn-glow"></span>
+                <button class="btn-new-trip" id="resetBtn">
+                    <i class="fas fa-plus"></i>
+                    <span>New Trip</span>
                 </button>
             </div>
         </div>
     </nav>
 
-    <!-- Main Container -->
-    <div class="main-container">
+    <!-- Main Content -->
+    <main class="main-content">
         <!-- Hero Section -->
-        <div class="hero-section" id="heroSection">
-            <div class="hero-content">
-                <!-- Animated Title -->
-                <div class="hero-title-wrapper">
-                    <h1 class="hero-title glitch" data-text="Plan Your Perfect Journey">
-                        Plan Your Perfect Journey
-                    </h1>
-                    <div class="hero-title-underline"></div>
-                </div>
-                
-                <p class="hero-subtitle typing-text">
-                    AI-powered travel planning with real-time prices, instant booking links, and personalized recommendations
-                </p>
-                
-                <!-- Feature Cards with 3D Effect -->
-                <div class="features-grid">
-                    <div class="feature-card glass-card" data-tilt>
-                        <div class="feature-glow"></div>
-                        <div class="feature-icon-wrapper">
-                            <div class="feature-icon">✈️</div>
-                            <div class="icon-particles"></div>
-                        </div>
+        <section class="hero-section" id="heroSection">
+            <h1 class="hero-title">Plan Your Perfect Journey</h1>
+            
+            <!-- Feature Cards -->
+            <div class="feature-cards">
+                <div class="feature-card flights-card">
+                    <div class="card-icon"><i class="fas fa-plane"></i></div>
+                    <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=400&h=300&fit=crop" alt="Flights" class="card-bg-img">
+                    <div class="card-content">
                         <h3>Flights</h3>
                         <p>Best deals across 500+ airlines</p>
-                        <div class="feature-stats">
-                            <span class="stat-value">500+</span>
-                            <span class="stat-label">Airlines</span>
-                        </div>
+                        <span class="card-price">From ₹15,000</span>
                     </div>
-                    <div class="feature-card glass-card" data-tilt>
-                        <div class="feature-glow"></div>
-                        <div class="feature-icon-wrapper">
-                            <div class="feature-icon">🚂</div>
-                            <div class="icon-particles"></div>
-                        </div>
+                </div>
+                <div class="feature-card trains-card">
+                    <div class="card-icon"><i class="fas fa-train"></i></div>
+                    <img src="https://images.unsplash.com/photo-1474487548417-781cb71495f3?w=400&h=300&fit=crop" alt="Trains" class="card-bg-img">
+                    <div class="card-content">
                         <h3>Trains & Buses</h3>
                         <p>All ground transport options</p>
-                        <div class="feature-stats">
-                            <span class="stat-value">1000+</span>
-                            <span class="stat-label">Routes</span>
-                        </div>
+                        <span class="card-price">From ₹500</span>
                     </div>
-                    <div class="feature-card glass-card" data-tilt>
-                        <div class="feature-glow"></div>
-                        <div class="feature-icon-wrapper">
-                            <div class="feature-icon">🏨</div>
-                            <div class="icon-particles"></div>
-                        </div>
+                </div>
+                <div class="feature-card hotels-card">
+                    <div class="card-icon"><i class="fas fa-hotel"></i></div>
+                    <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=300&fit=crop" alt="Hotels" class="card-bg-img">
+                    <div class="card-content">
                         <h3>Hotels</h3>
                         <p>From budget to ultra-luxury</p>
-                        <div class="feature-stats">
-                            <span class="stat-value">2M+</span>
-                            <span class="stat-label">Properties</span>
-                        </div>
+                        <span class="card-price">From ₹2,000</span>
                     </div>
-                    <div class="feature-card glass-card" data-tilt>
-                        <div class="feature-glow"></div>
-                        <div class="feature-icon-wrapper">
-                            <div class="feature-icon">🌤️</div>
-                            <div class="icon-particles"></div>
-                        </div>
+                </div>
+                <div class="feature-card weather-card">
+                    <div class="card-icon"><i class="fas fa-cloud-sun"></i></div>
+                    <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&h=300&fit=crop" alt="Weather" class="card-bg-img">
+                    <div class="card-content">
                         <h3>Weather</h3>
                         <p>Real-time forecasts</p>
-                        <div class="feature-stats">
-                            <span class="stat-value">Live</span>
-                            <span class="stat-label">Updates</span>
+                        <span class="card-price">Live Updates</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="search-container">
+                <div class="search-bar">
+                    <i class="fas fa-search search-icon"></i>
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Search your travel plan..."
+                        autocomplete="off"
+                    >
+                    <button class="voice-btn" id="voiceBtn" title="Voice Input">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                    <button class="dream-btn" id="sendBtn">
+                        Dream It
+                    </button>
+                </div>
+            </div>
+
+            <!-- Featured Destinations -->
+            <section class="destinations-section">
+                <div class="section-header">
+                    <h2>Featured Destinations</h2>
+                    <div class="carousel-nav">
+                        <button class="carousel-btn prev" id="destPrev"><i class="fas fa-chevron-left"></i></button>
+                        <button class="carousel-btn next" id="destNext"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="destinations-carousel" id="destinationsCarousel">
+                    <div class="destination-card" data-destination="Bali">
+                        <img src="https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=400&h=300&fit=crop" alt="Bali">
+                        <div class="destination-info">
+                            <span class="destination-name">Bali, Indonesia</span>
+                            <button class="explore-btn">Explore</button>
+                        </div>
+                    </div>
+                    <div class="destination-card" data-destination="Paris">
+                        <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400&h=300&fit=crop" alt="Paris">
+                        <div class="destination-info">
+                            <span class="destination-name">Paris, France</span>
+                            <button class="explore-btn">Explore</button>
+                        </div>
+                    </div>
+                    <div class="destination-card" data-destination="Maldives">
+                        <img src="https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=400&h=300&fit=crop" alt="Maldives">
+                        <div class="destination-info">
+                            <span class="destination-name">Maldives</span>
+                            <button class="explore-btn">Explore</button>
+                        </div>
+                    </div>
+                    <div class="destination-card" data-destination="Switzerland">
+                        <img src="https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?w=400&h=300&fit=crop" alt="Switzerland">
+                        <div class="destination-info">
+                            <span class="destination-name">Switzerland</span>
+                            <button class="explore-btn">Explore</button>
+                        </div>
+                    </div>
+                    <div class="destination-card" data-destination="Dubai">
+                        <img src="https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=400&h=300&fit=crop" alt="Dubai">
+                        <div class="destination-info">
+                            <span class="destination-name">Dubai, UAE</span>
+                            <button class="explore-btn">Explore</button>
+                        </div>
+                    </div>
+                    <div class="destination-card" data-destination="Tokyo">
+                        <img src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&h=300&fit=crop" alt="Tokyo">
+                        <div class="destination-info">
+                            <span class="destination-name">Tokyo, Japan</span>
+                            <button class="explore-btn">Explore</button>
                         </div>
                     </div>
                 </div>
+            </section>
 
-                <!-- Quick Destination Search -->
-                <div class="quick-search glass-card">
-                    <div class="search-header">
-                        <i class="fas fa-compass"></i>
-                        <span>Where would you like to go?</span>
-                    </div>
-                    <div class="destination-chips">
-                        <button class="dest-chip" data-destination="Bali">
-                            <span class="chip-emoji">🏝️</span>
-                            <span class="chip-text">Bali</span>
-                            <span class="chip-price">from $499</span>
-                        </button>
-                        <button class="dest-chip" data-destination="Paris">
-                            <span class="chip-emoji">🗼</span>
-                            <span class="chip-text">Paris</span>
-                            <span class="chip-price">from $599</span>
-                        </button>
-                        <button class="dest-chip" data-destination="Tokyo">
-                            <span class="chip-emoji">🗾</span>
-                            <span class="chip-text">Tokyo</span>
-                            <span class="chip-price">from $799</span>
-                        </button>
-                        <button class="dest-chip" data-destination="Dubai">
-                            <span class="chip-emoji">🏙️</span>
-                            <span class="chip-text">Dubai</span>
-                            <span class="chip-price">from $449</span>
-                        </button>
-                        <button class="dest-chip" data-destination="Maldives">
-                            <span class="chip-emoji">🌊</span>
-                            <span class="chip-text">Maldives</span>
-                            <span class="chip-price">from $899</span>
-                        </button>
-                        <button class="dest-chip" data-destination="Singapore">
-                            <span class="chip-emoji">🦁</span>
-                            <span class="chip-text">Singapore</span>
-                            <span class="chip-price">from $399</span>
-                        </button>
-                        <button class="dest-chip" data-destination="London">
-                            <span class="chip-emoji">🎡</span>
-                            <span class="chip-text">London</span>
-                            <span class="chip-price">from $649</span>
-                        </button>
-                        <button class="dest-chip" data-destination="New York">
-                            <span class="chip-emoji">🗽</span>
-                            <span class="chip-text">New York</span>
-                            <span class="chip-price">from $749</span>
-                        </button>
-                        <button class="dest-chip" data-destination="Thailand">
-                            <span class="chip-emoji">🐘</span>
-                            <span class="chip-text">Thailand</span>
-                            <span class="chip-price">from $349</span>
-                        </button>
-                        <button class="dest-chip" data-destination="Switzerland">
-                            <span class="chip-emoji">🏔️</span>
-                            <span class="chip-text">Switzerland</span>
-                            <span class="chip-price">from $999</span>
-                        </button>
-                    </div>
+            <!-- Recent Searches (Hidden by default) -->
+            <div class="recent-searches" id="recentSearches" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="fas fa-history"></i> Recent Searches</h2>
+                    <button class="clear-btn" id="clearHistory">Clear All</button>
                 </div>
-
-                <!-- Interactive World Map -->
-                <div class="map-section glass-card">
-                    <div class="map-header">
-                        <h3><i class="fas fa-globe-americas"></i> Explore Destinations</h3>
-                        <button class="map-toggle" id="mapToggle">
-                            <i class="fas fa-expand"></i>
-                        </button>
-                    </div>
-                    <div class="map-container" id="worldMap"></div>
-                    <div class="map-legend">
-                        <span class="legend-item"><span class="dot popular"></span> Popular</span>
-                        <span class="legend-item"><span class="dot trending"></span> Trending</span>
-                        <span class="legend-item"><span class="dot budget"></span> Budget-Friendly</span>
-                    </div>
-                </div>
-
-                <!-- Recent Searches -->
-                <div class="recent-searches glass-card" id="recentSearches" style="display: none;">
-                    <div class="search-header">
-                        <i class="fas fa-history"></i>
-                        <span>Recent Searches</span>
-                        <button class="clear-history" id="clearHistory" title="Clear History">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </div>
-                    <div class="recent-list" id="recentList">
-                        <!-- Recent searches will be added here by JS -->
-                    </div>
-                </div>
-
-                <!-- Example Queries -->
-                <div class="cta-section">
-                    <p class="cta-text">✨ Try these popular queries:</p>
-                    <div class="example-queries">
-                        <button class="example-btn glass-btn" data-message="Plan a trip from Delhi to Malaysia on February 4th">
-                            <i class="fas fa-plane-departure"></i>
-                            Delhi → Malaysia, Feb 4
-                        </button>
-                        <button class="example-btn glass-btn" data-message="Weekend getaway from Mumbai to Goa with budget hotels">
-                            <i class="fas fa-umbrella-beach"></i>
-                            Mumbai → Goa Weekend
-                        </button>
-                        <button class="example-btn glass-btn" data-message="Show me luxury hotels in Jaipur with spa facilities">
-                            <i class="fas fa-hotel"></i>
-                            Luxury Hotels Jaipur
-                        </button>
-                        <button class="example-btn glass-btn" data-message="What's the weather like in Europe in March?">
-                            <i class="fas fa-cloud-sun"></i>
-                            Europe Weather
-                        </button>
-                        <button class="example-btn glass-btn" data-message="Find cheap flights from Bangalore to Singapore next month">
-                            <i class="fas fa-tag"></i>
-                            Budget Flights
-                        </button>
-                        <button class="example-btn glass-btn" data-message="Family vacation to Thailand for 7 days with kids activities">
-                            <i class="fas fa-users"></i>
-                            Family Thailand Trip
-                        </button>
-                    </div>
-                </div>
+                <div class="recent-list" id="recentList"></div>
             </div>
-            
-            <!-- Floating Decorations -->
-            <div class="floating-elements">
-                <div class="float-element plane"><i class="fas fa-plane"></i></div>
-                <div class="float-element globe"><i class="fas fa-globe"></i></div>
-                <div class="float-element suitcase"><i class="fas fa-suitcase-rolling"></i></div>
-                <div class="float-element passport"><i class="fas fa-passport"></i></div>
-            </div>
-        </div>
+        </section>
 
-        <!-- Chat Container -->
+        <!-- Chat Container (Hidden initially) -->
         <div class="chat-wrapper" id="chatWrapper">
-            <!-- Back to Home Button -->
             <div class="chat-header">
                 <button class="btn-back" id="backToHome">
                     <i class="fas fa-arrow-left"></i>
-                    <span>Back to Home</span>
+                    <span>Back</span>
                 </button>
                 <div class="chat-title">
-                    <i class="fas fa-comments"></i>
-                    <span>Trip Planning Chat</span>
+                    <i class="fas fa-robot"></i>
+                    <span>AI Trip Planner</span>
                 </div>
-                <button class="btn-save-trip" id="saveTripBtn" title="Save this trip">
+                <button class="btn-save" id="saveTripBtn" title="Save Trip">
                     <i class="fas fa-bookmark"></i>
                 </button>
             </div>
             
-            <!-- AI Progress Steps -->
+            <!-- AI Progress -->
             <div class="ai-progress" id="aiProgress">
                 <div class="progress-step" data-step="1">
                     <div class="step-icon"><i class="fas fa-search"></i></div>
@@ -301,108 +216,72 @@
                 </div>
                 <div class="progress-connector"></div>
                 <div class="progress-step" data-step="4">
-                    <div class="step-icon"><i class="fas fa-check-circle"></i></div>
+                    <div class="step-icon"><i class="fas fa-check"></i></div>
                     <span>Done!</span>
                 </div>
             </div>
             
-            <div class="chat-container" id="chatContainer">
-                <!-- Messages will be added here -->
+            <div class="chat-container" id="chatContainer"></div>
+        </div>
+    </main>
+
+    <!-- Travel Options Panel -->
+    <div class="travel-options-panel" id="travelOptionsPanel">
+        <div class="options-toggle" id="optionsToggle">
+            <i class="fas fa-sliders-h"></i>
+            <span>Options</span>
+        </div>
+        <div class="options-content">
+            <div class="option-group">
+                <label><i class="fas fa-plane-departure"></i> Depart</label>
+                <input type="date" id="travelDate" class="option-input">
+            </div>
+            <div class="option-group" id="returnDateGroup">
+                <label><i class="fas fa-plane-arrival"></i> Return</label>
+                <input type="date" id="returnDate" class="option-input">
+            </div>
+            <div class="option-group">
+                <label><i class="fas fa-users"></i> Travelers</label>
+                <div class="traveler-selector">
+                    <button class="traveler-btn" id="travelerMinus">−</button>
+                    <span id="travelerCount">1</span>
+                    <button class="traveler-btn" id="travelerPlus">+</button>
+                </div>
+            </div>
+            <div class="option-group">
+                <label><i class="fas fa-exchange-alt"></i> Trip Type</label>
+                <select id="tripType" class="option-select">
+                    <option value="roundtrip">Round Trip</option>
+                    <option value="oneway">One Way</option>
+                </select>
+            </div>
+            <div class="option-group">
+                <label><i class="fas fa-wallet"></i> Budget</label>
+                <select id="budgetRange" class="option-select">
+                    <option value="any">Any</option>
+                    <option value="budget">Budget</option>
+                    <option value="midrange">Mid-Range</option>
+                    <option value="luxury">Luxury</option>
+                </select>
             </div>
         </div>
     </div>
 
-    <!-- Input Area -->
-    <div class="input-section glass-input">
-        <div class="input-container">
-            <!-- Travel Options Row -->
-            <div class="travel-options">
-                <div class="option-group">
-                    <label for="travelDate"><i class="fas fa-plane-departure"></i> Depart</label>
-                    <input type="date" id="travelDate" class="date-picker">
-                </div>
-                <div class="option-group" id="returnDateGroup">
-                    <label for="returnDate"><i class="fas fa-plane-arrival"></i> Return</label>
-                    <input type="date" id="returnDate" class="date-picker">
-                </div>
-                <div class="option-group">
-                    <label for="travelers"><i class="fas fa-users"></i> Travelers</label>
-                    <div class="traveler-selector">
-                        <button class="traveler-btn minus" id="travelerMinus">−</button>
-                        <span class="traveler-count" id="travelerCount">1</span>
-                        <button class="traveler-btn plus" id="travelerPlus">+</button>
-                    </div>
-                </div>
-                <div class="option-group">
-                    <label for="tripType"><i class="fas fa-exchange-alt"></i> Trip Type</label>
-                    <select id="tripType" class="trip-type-select">
-                        <option value="roundtrip">Round Trip</option>
-                        <option value="oneway">One Way</option>
-                        <option value="multicity">Multi-City</option>
-                    </select>
-                </div>
-                <div class="option-group">
-                    <label for="budget"><i class="fas fa-wallet"></i> Budget</label>
-                    <select id="budgetRange" class="trip-type-select">
-                        <option value="any">Any Budget</option>
-                        <option value="budget">Budget ($)</option>
-                        <option value="midrange">Mid-Range ($$)</option>
-                        <option value="luxury">Luxury ($$$)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="input-wrapper">
-                <div class="input-icon">
-                    <i class="fas fa-map-marker-alt"></i>
-                </div>
-                <input 
-                    type="text" 
-                    id="messageInput" 
-                    placeholder="Tell me your travel plans... (e.g., 'Trip to Paris for 5 days in March')"
-                    autocomplete="off"
-                >
-                <button class="btn-voice" id="voiceBtn" title="Voice Input">
-                    <i class="fas fa-microphone"></i>
-                </button>
-                <button class="btn-send magnetic-btn" id="sendBtn">
-                    <span class="btn-content">
-                        <i class="fas fa-paper-plane"></i>
-                        <span>Send</span>
-                    </span>
-                    <span class="btn-glow"></span>
-                </button>
-            </div>
-            <div class="input-hints">
-                <span class="hint-item"><kbd>Enter</kbd> to send</span>
-                <span class="hint-item"><kbd>Shift + Enter</kbd> for new line</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Loading Overlay - Cinematic -->
+    <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-content">
-            <div class="loader-wrapper">
+            <div class="loader">
                 <div class="loader-ring"></div>
                 <div class="loader-ring"></div>
                 <div class="loader-ring"></div>
-                <div class="loader-plane"><i class="fas fa-plane"></i></div>
+                <i class="fas fa-plane loader-icon"></i>
             </div>
-            <p class="loading-text" id="loadingText">Searching for the best options...</p>
-            <p class="loading-subtext">
-                <span class="typing-dots">
-                    <span></span><span></span><span></span>
-                </span>
-            </p>
-            <div class="loading-facts" id="loadingFacts">
-                <p>✨ Did you know? The average traveler visits 3 new countries per year!</p>
+            <p class="loading-text" id="loadingText">Finding the best options...</p>
+            <div class="loading-dots">
+                <span></span><span></span><span></span>
             </div>
         </div>
     </div>
-
-    <!-- Confetti Canvas -->
-    <canvas id="confettiCanvas"></canvas>
 
     <!-- Trip History Sidebar -->
     <div class="sidebar" id="tripSidebar">
@@ -416,79 +295,64 @@
             <div class="empty-state">
                 <i class="fas fa-suitcase"></i>
                 <p>No saved trips yet</p>
-                <span>Your saved trips will appear here</span>
             </div>
         </div>
     </div>
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-    <!-- Toast Notifications -->
+    <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
     <!-- PWA Install Prompt -->
-    <div class="pwa-install-prompt" id="pwaInstallPrompt" style="display: none;">
-        <div class="pwa-content">
-            <i class="fas fa-mobile-alt"></i>
-            <div class="pwa-text">
-                <strong>Install TravelAI</strong>
-                <span>Add to home screen for quick access</span>
-            </div>
-            <button class="pwa-install-btn" id="pwaInstallBtn">Install</button>
-            <button class="pwa-dismiss" id="pwaDismiss"><i class="fas fa-times"></i></button>
+    <div class="pwa-prompt" id="pwaInstallPrompt" style="display: none;">
+        <i class="fas fa-mobile-alt"></i>
+        <div class="pwa-text">
+            <strong>Install TravelAI</strong>
+            <span>Quick access from home screen</span>
         </div>
+        <button class="pwa-btn" id="pwaInstallBtn">Install</button>
+        <button class="pwa-close" id="pwaDismiss"><i class="fas fa-times"></i></button>
     </div>
 
-    <!-- Leaflet JS for Interactive Map -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     
-    <!-- Service Worker Registration -->
+    <!-- Service Worker -->
     <script>
-        // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/static/sw.js')
-                    .then(reg => console.log('✅ Service Worker registered:', reg.scope))
-                    .catch(err => console.log('❌ Service Worker error:', err));
+                    .then(reg => console.log('✅ SW registered'))
+                    .catch(err => console.log('❌ SW error:', err));
             });
         }
 
-        // PWA Install Prompt
+        // PWA Install
         let deferredPrompt;
         const pwaPrompt = document.getElementById('pwaInstallPrompt');
-        const pwaInstallBtn = document.getElementById('pwaInstallBtn');
-        const pwaDismiss = document.getElementById('pwaDismiss');
-
+        
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            // Show install prompt after 10 seconds
             setTimeout(() => {
                 if (!localStorage.getItem('pwaPromptDismissed')) {
                     pwaPrompt.style.display = 'flex';
                 }
-            }, 10000);
+            }, 15000);
         });
 
-        if (pwaInstallBtn) {
-            pwaInstallBtn.addEventListener('click', async () => {
-                if (deferredPrompt) {
-                    deferredPrompt.prompt();
-                    const { outcome } = await deferredPrompt.userChoice;
-                    console.log('PWA install outcome:', outcome);
-                    deferredPrompt = null;
-                    pwaPrompt.style.display = 'none';
-                }
-            });
-        }
-
-        if (pwaDismiss) {
-            pwaDismiss.addEventListener('click', () => {
+        document.getElementById('pwaInstallBtn')?.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                await deferredPrompt.userChoice;
+                deferredPrompt = null;
                 pwaPrompt.style.display = 'none';
-                localStorage.setItem('pwaPromptDismissed', 'true');
-            });
-        }
+            }
+        });
+
+        document.getElementById('pwaDismiss')?.addEventListener('click', () => {
+            pwaPrompt.style.display = 'none';
+            localStorage.setItem('pwaPromptDismissed', 'true');
+        });
     </script>
 </body>
 </html>
