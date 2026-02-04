@@ -136,8 +136,11 @@ async def chat():
             import traceback
             traceback.print_exc()
             
+            # Handle rate limit errors specifically
+            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "rate" in error_msg.lower():
+                response_text = ["I'm currently experiencing high demand. Please wait 30 seconds and try again. (Rate limit reached)"]
             # Provide more helpful error message
-            if "model" in error_msg.lower() or "not found" in error_msg.lower():
+            elif "model" in error_msg.lower() or "not found" in error_msg.lower():
                 response_text = ["Sorry, there's an issue with the AI model configuration. Please check the server logs."]
             elif "api" in error_msg.lower() or "key" in error_msg.lower() or "auth" in error_msg.lower():
                 response_text = ["API authentication issue. Please check your GOOGLE_API_KEY in the .env file."]
