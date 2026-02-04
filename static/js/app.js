@@ -660,14 +660,33 @@ function reconstructHTML(html, charCount) {
 }
 
 function formatMessage(text) {
-    // Convert markdown-like formatting
+    // Convert markdown tables to HTML tables
+    text = text.replace(/\n?\|(.+)\|\n\|[-:| ]+\|\n((?:\|.+\|\n?)+)/g, (match, header, body) => {
+        const headerCells = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+        const bodyRows = body.trim().split('\n').map(row => {
+            const cells = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+            return `<tr>${cells}</tr>`;
+        }).join('');
+        return `<table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+    });
+    
+    // Convert headers (remove # and make bold/larger)
+    text = text.replace(/^### (.+)$/gm, '<div class="md-h3">$1</div>');
+    text = text.replace(/^## (.+)$/gm, '<div class="md-h2">$1</div>');
+    text = text.replace(/^# (.+)$/gm, '<div class="md-h1">$1</div>');
+    
+    // Convert markdown links [text](url) BEFORE other formatting
+    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    
+    // Convert other markdown formatting
     return text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
         .replace(/\n/g, '<br>')
-        .replace(/(\d+\.\s)/g, '<br>$1')
-        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+        .replace(/(^|\s)(\d+\.\s)/g, '$1<br>$2')
+        // Only convert bare URLs (not already in an href)
+        .replace(/(?<!href=")(https?:\/\/[^\s<\)]+?)(?=[.,;:!?\s<]|$)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -1024,6 +1024,64 @@ body {
     50% { opacity: 0; }
 }
 
+/* Markdown Headers in Chat */
+.md-h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--gold);
+    margin: 1rem 0 0.5rem 0;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 0.3rem;
+}
+
+.md-h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--gold-light);
+    margin: 0.8rem 0 0.4rem 0;
+}
+
+.md-h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0.6rem 0 0.3rem 0;
+}
+
+/* Markdown Tables in Chat */
+.md-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.8rem 0;
+    font-size: 0.9rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.md-table th {
+    background: rgba(212, 175, 55, 0.2);
+    color: var(--gold);
+    font-weight: 600;
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.md-table td {
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+}
+
+.md-table tr:last-child td {
+    border-bottom: none;
+}
+
+.md-table tr:hover td {
+    background: rgba(255, 255, 255, 0.03);
+}
+
 /* =================== Chat Input Bar =================== */
 .chat-input-bar {
     flex-shrink: 0;
