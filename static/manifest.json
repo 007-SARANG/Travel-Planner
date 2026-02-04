@@ -1,6 +1,6 @@
 {
-    "name": "TravelAI - Smart Trip Planner",
-    "short_name": "TravelAI",
+    "name": "TripWise - Smart Trip Planner",
+    "short_name": "TripWise",
     "description": "AI-powered travel planning assistant with real-time flight, hotel, and weather information",
     "start_url": "/",
     "display": "standalone",

@@ -19,6 +19,8 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'travel-planner-secret-key-' + str(uuid.uuid4()))
+app.config['TEMPLATES_AUTO_RELOAD'] = True  # Force template reload
+app.config['DEBUG'] = True  # Enable debug mode
 CORS(app)
 
 # Initialize the runner with root agent
@@ -34,7 +36,7 @@ active_sessions = {}
 
 
 def async_route(f):
-    """Decorator to handle async routes in Flask."""
+    """Decorator to handle async routes in Flask with proper cleanup."""
     @wraps(f)
     def wrapper(*args, **kwargs):
         loop = asyncio.new_event_loop()
@@ -42,6 +44,13 @@ def async_route(f):
         try:
             return loop.run_until_complete(f(*args, **kwargs))
         finally:
+            # Cancel all pending tasks to avoid warnings
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            # Allow cancelled tasks to complete
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             loop.close()
     return wrapper
 

@@ -305,6 +305,55 @@ function initEventListeners() {
 
     // Voice Button
     document.getElementById('voiceBtn')?.addEventListener('click', toggleVoice);
+
+    // Follow-up Input Bar (in chat view)
+    document.getElementById('followUpInput')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleFollowUpMessage();
+        }
+    });
+
+    document.getElementById('chatSendBtn')?.addEventListener('click', handleFollowUpMessage);
+    
+    // Chat Voice Button
+    document.getElementById('chatVoiceBtn')?.addEventListener('click', () => {
+        if (!recognition) {
+            showToast('Voice not supported in this browser', 'error');
+            return;
+        }
+        
+        const btn = document.getElementById('chatVoiceBtn');
+        if (btn?.classList.contains('recording')) {
+            recognition.stop();
+            btn.classList.remove('recording');
+        } else {
+            // Update recognition to use follow-up input
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                document.getElementById('followUpInput').value = transcript;
+                document.getElementById('chatVoiceBtn')?.classList.remove('recording');
+            };
+            recognition.start();
+            btn?.classList.add('recording');
+        }
+    });
+}
+
+// Handle follow-up message from chat input bar
+function handleFollowUpMessage() {
+    const input = document.getElementById('followUpInput');
+    const message = input?.value.trim();
+    
+    if (!message || isTyping) return;
+    
+    // Add message and send to backend
+    addMessage(message, 'user');
+    input.value = '';
+    
+    // Send with travel context
+    const fullMessage = message + getTravelContext();
+    sendMessage(fullMessage);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -512,11 +561,102 @@ function addMessage(content, role) {
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    contentDiv.innerHTML = formatMessage(content);
 
-    messageDiv.appendChild(contentDiv);
-    container.appendChild(messageDiv);
+    if (role === 'assistant') {
+        // Typewriter effect for assistant messages
+        contentDiv.classList.add('typing');
+        messageDiv.appendChild(contentDiv);
+        container.appendChild(messageDiv);
+        
+        typewriterEffect(contentDiv, content, () => {
+            contentDiv.classList.remove('typing');
+        });
+    } else {
+        // Instant display for user messages
+        contentDiv.innerHTML = formatMessage(content);
+        messageDiv.appendChild(contentDiv);
+        container.appendChild(messageDiv);
+    }
+    
     container.scrollTop = container.scrollHeight;
+}
+
+// Typewriter effect function
+function typewriterEffect(element, text, callback) {
+    const formattedText = formatMessage(text);
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = formattedText;
+    const plainText = tempDiv.textContent || tempDiv.innerText;
+    
+    let index = 0;
+    const speed = 0.2; //ms per character (5x faster)
+    const container = document.getElementById('chatContainer');
+    
+    // Track if user has scrolled up manually
+    let userScrolledUp = false;
+    const scrollThreshold = 100; // pixels from bottom to consider "at bottom"
+    
+    container.addEventListener('scroll', function checkScroll() {
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < scrollThreshold;
+        userScrolledUp = !isNearBottom;
+    });
+    
+    function type() {
+        if (index < plainText.length) {
+            // Type 3 characters per frame (3x slower)
+            const charsPerFrame = 3;
+            index = Math.min(index + charsPerFrame, plainText.length);
+            
+            // Build HTML progressively to maintain formatting
+            const partialText = plainText.substring(0, index);
+            element.innerHTML = reconstructHTML(formattedText, partialText.length);
+            
+            // Only auto-scroll if user hasn't scrolled up
+            if (!userScrolledUp) {
+                container.scrollTop = container.scrollHeight;
+            }
+            
+            setTimeout(type, 1);
+        } else {
+            // Finished typing - show full formatted text
+            element.innerHTML = formattedText;
+            if (callback) callback();
+        }
+    }
+    
+    type();
+}
+
+// Reconstruct HTML showing only first N characters
+function reconstructHTML(html, charCount) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    let count = 0;
+    
+    function truncate(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            const remaining = charCount - count;
+            if (remaining <= 0) {
+                node.textContent = '';
+            } else if (node.textContent.length > remaining) {
+                node.textContent = node.textContent.substring(0, remaining);
+                count = charCount;
+            } else {
+                count += node.textContent.length;
+            }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            for (const child of Array.from(node.childNodes)) {
+                if (count >= charCount) {
+                    child.remove();
+                } else {
+                    truncate(child);
+                }
+            }
+        }
+    }
+    
+    truncate(tempDiv);
+    return tempDiv.innerHTML;
 }
 
 function formatMessage(text) {
