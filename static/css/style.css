@@ -1938,26 +1938,41 @@ body {
     display: flex;
     gap: var(--spacing-md);
     align-items: flex-start;
+    padding: var(--spacing-xs) 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.timeline-slot:last-child {
+    border-bottom: none;
 }
 
 .slot-badge {
-    font-size: 0.75rem;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 0.78rem;
     font-weight: 700;
-    padding: 3px 10px;
-    border-radius: var(--radius-sm);
-    min-width: 90px;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    min-width: 100px;
+    width: auto !important;
+    max-width: fit-content !important;
     text-align: center;
     flex-shrink: 0;
+    white-space: nowrap;
+    text-transform: capitalize;
+    margin-bottom: 0 !important;
 }
 
-.slot-morning { background: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); }
-.slot-afternoon { background: rgba(59, 130, 246, 0.15); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.3); }
-.slot-evening { background: rgba(139, 92, 246, 0.15); color: #A78BFA; border: 1px solid rgba(139, 92, 246, 0.3); }
+.slot-morning { background: rgba(245, 158, 11, 0.18); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.35); }
+.slot-afternoon { background: rgba(59, 130, 246, 0.18); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.35); }
+.slot-evening { background: rgba(139, 92, 246, 0.18); color: #A78BFA; border: 1px solid rgba(139, 92, 246, 0.35); }
 
 .slot-content {
     font-size: 0.88rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
+    color: var(--text-primary);
+    line-height: 1.6;
     flex: 1;
 }
 

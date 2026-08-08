@@ -1376,7 +1376,7 @@ function transformItineraryTimeline(contentDiv) {
         cardHeader.className = 'timeline-day-header';
         cardHeader.innerHTML = `
             <div class="day-badge-title">
-                <span class="day-badge">Day ${dayNum}</span>
+                <span class="day-badge">DAY ${dayNum}</span>
                 <span class="day-title-text">${dayTitle}</span>
             </div>
             <i class="fas fa-chevron-down timeline-toggle-icon"></i>
@@ -1385,22 +1385,35 @@ function transformItineraryTimeline(contentDiv) {
         const cardBody = document.createElement('div');
         cardBody.className = 'timeline-body';
 
-        if (dayContentNodes.length > 0) {
-            dayContentNodes.forEach(node => cardBody.appendChild(node));
-        } else {
-            cardBody.innerHTML = `<div class="slot-content">Activities and recommendations for Day ${dayNum}.</div>`;
-        }
+        const rawDayHtml = dayContentNodes.map(n => n.outerHTML || n.textContent).join('');
+        const slots = parseDaySlots(rawDayHtml);
 
-        cardBody.querySelectorAll('strong').forEach(b => {
-            const txt = b.textContent.toLowerCase();
-            if (txt.includes('morning')) {
-                b.className = 'slot-badge slot-morning';
-            } else if (txt.includes('afternoon')) {
-                b.className = 'slot-badge slot-afternoon';
-            } else if (txt.includes('evening') || txt.includes('night')) {
-                b.className = 'slot-badge slot-evening';
-            }
-        });
+        if (slots.length > 0) {
+            slots.forEach(slot => {
+                const slotDiv = document.createElement('div');
+                slotDiv.className = 'timeline-slot';
+                
+                let badgeClass = 'slot-morning';
+                let icon = 'fa-sun';
+                if (slot.time.toLowerCase().includes('afternoon')) {
+                    badgeClass = 'slot-afternoon';
+                    icon = 'fa-cloud-sun';
+                } else if (slot.time.toLowerCase().includes('evening') || slot.time.toLowerCase().includes('night')) {
+                    badgeClass = 'slot-evening';
+                    icon = 'fa-moon';
+                }
+
+                slotDiv.innerHTML = `
+                    <div class="slot-badge ${badgeClass}">
+                        <i class="fas ${icon}"></i> ${slot.time}
+                    </div>
+                    <div class="slot-content">${slot.content}</div>
+                `;
+                cardBody.appendChild(slotDiv);
+            });
+        } else {
+            dayContentNodes.forEach(node => cardBody.appendChild(node));
+        }
 
         cardHeader.addEventListener('click', () => {
             dayCard.classList.toggle('collapsed');
@@ -1411,9 +1424,37 @@ function transformItineraryTimeline(contentDiv) {
 
         timelineContainer.appendChild(dayCard);
         header.remove();
+        dayContentNodes.forEach(n => n.remove());
     });
 
     contentDiv.appendChild(timelineContainer);
+}
+
+function parseDaySlots(html) {
+    const pattern = /(?:<strong>|<b>|<p>)?\s*(Morning|Afternoon|Evening|Night):?\s*(?:<\/strong>|<\/b>|<\/p>)?/gi;
+    const matches = [...html.matchAll(pattern)];
+
+    if (matches.length === 0) return [];
+
+    let slots = [];
+    for (let i = 0; i < matches.length; i++) {
+        const currentMatch = matches[i];
+        const timeName = currentMatch[1];
+        const startIdx = currentMatch.index + currentMatch[0].length;
+        const endIdx = (i + 1 < matches.length) ? matches[i + 1].index : html.length;
+
+        let content = html.substring(startIdx, endIdx).trim();
+        content = content.replace(/^(?::|<br\s*\/?>|\s|-)+/i, '').replace(/(?:<br\s*\/?>|\s)+$/i, '').trim();
+
+        if (content) {
+            slots.push({
+                time: timeName,
+                content: content
+            });
+        }
+    }
+
+    return slots;
 }
 
 function injectCostBreakdown(contentDiv, rawText) {
