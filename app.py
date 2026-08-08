@@ -116,19 +116,22 @@ def chat():
         if client_id not in conversations:
             conversations[client_id] = []
         
-        # Determine destination from payload or prompt
+        # Determine destination and dates from payload or prompt
         destination = data.get('destination', '').strip() or extract_destination(user_message)
         budget_tier = data.get('budgetTier', '').strip()
+        start_date = data.get('startDate', '').strip()
         
         # Fetch live weather & hotel options for destination
         context_blocks = []
+        if start_date:
+            context_blocks.append(f"[CONFIRMED TRIP DATES - Departing: {start_date}]")
+
         if destination:
             try:
                 weather_data = get_weather(destination, forecast_days=5)
                 if weather_data and "Error" not in weather_data and "Could not fetch" not in weather_data:
                     context_blocks.append(f"[WEATHER DATA - Real Live Forecast for {destination}]\n{weather_data}")
                 else:
-                    # Provide fallback seasonal estimate so LLM has concrete weather info
                     context_blocks.append(f"[WEATHER DATA - Estimated Conditions for {destination}]\nExpect pleasant seasonal travel temperatures around 25°C-30°C.")
             except Exception as e:
                 print(f"[!] Weather fetch failed: {e}")

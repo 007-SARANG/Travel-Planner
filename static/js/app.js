@@ -882,6 +882,10 @@ async function startWizardFlow(initialOptions = {}) {
         console.error('Reset error:', error);
     }
 
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const defaultStartDate = tomorrow.toISOString().split('T')[0];
+
     sessionId = null;
     wizardState = {
         active: true,
@@ -889,6 +893,7 @@ async function startWizardFlow(initialOptions = {}) {
         origin: initialOptions.origin || 'Mumbai',
         destination: initialOptions.destination || 'Goa',
         travelers: initialOptions.travelers || 2,
+        startDate: initialOptions.startDate || defaultStartDate,
         durationDays: initialOptions.durationDays || 5,
         budgetTier: initialOptions.budgetTier || 'comfort',
         vibes: initialOptions.vibes || ['Beach', 'Relaxation']
@@ -996,7 +1001,7 @@ function renderWizardStep2() {
                 </div>
                 <div class="wizard-actions">
                     <button class="btn-wizard-next" id="wizNextStep2">
-                        <span>Next: Duration</span>
+                        <span>Next: Dates & Duration</span>
                         <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
@@ -1035,7 +1040,7 @@ function renderWizardStep2() {
     });
 }
 
-// Step 3: Duration
+// Step 3: Departure Date & Duration
 function renderWizardStep3() {
     const container = document.getElementById('chatContainer');
     const stepDiv = document.createElement('div');
@@ -1044,19 +1049,25 @@ function renderWizardStep3() {
     stepDiv.innerHTML = `
         <div class="message-content">
             <div class="wizard-step-header">
-                <i class="fas fa-calendar-alt"></i> Step 3: Duration & Days
+                <i class="fas fa-calendar-alt"></i> Step 3: Departure Date & Duration
             </div>
-            <p>How many days will your journey be?</p>
+            <p>When are you departing and how long will your journey be?</p>
             <div class="wizard-card">
+                <div class="wizard-route-row" style="margin-bottom: var(--spacing-md);">
+                    <div class="wizard-input-group">
+                        <label><i class="fas fa-calendar-day"></i> Departure Date</label>
+                        <input type="date" id="wizStartDateInput" value="${wizardState.startDate}">
+                    </div>
+                    <div class="wizard-input-group">
+                        <label><i class="fas fa-clock"></i> Trip Duration (Days)</label>
+                        <input type="number" id="wizDaysInput" min="1" max="30" value="${wizardState.durationDays}">
+                    </div>
+                </div>
                 <div class="wizard-chip-group">
                     <button class="wizard-chip ${wizardState.durationDays === 3 ? 'selected' : ''}" data-days="3">⚡ Weekend (3 Days)</button>
                     <button class="wizard-chip ${wizardState.durationDays === 5 ? 'selected' : ''}" data-days="5">🏖️ Standard (5 Days)</button>
                     <button class="wizard-chip ${wizardState.durationDays === 7 ? 'selected' : ''}" data-days="7">🗺️ Full Week (7 Days)</button>
                     <button class="wizard-chip ${wizardState.durationDays === 10 ? 'selected' : ''}" data-days="10">🌌 Explorer (10 Days)</button>
-                </div>
-                <div class="wizard-input-group" style="max-width: 200px; margin-bottom: var(--spacing-md);">
-                    <label>Or Enter Custom Days:</label>
-                    <input type="number" id="wizDaysInput" min="1" max="30" value="${wizardState.durationDays}">
                 </div>
                 <div class="wizard-actions">
                     <button class="btn-wizard-next" id="wizNextStep3">
@@ -1085,11 +1096,18 @@ function renderWizardStep3() {
         if (val && val > 0) wizardState.durationDays = val;
     });
 
+    document.getElementById('wizStartDateInput')?.addEventListener('change', (e) => {
+        if (e.target.value) wizardState.startDate = e.target.value;
+    });
+
     document.getElementById('wizNextStep3')?.addEventListener('click', () => {
         const inputVal = parseInt(document.getElementById('wizDaysInput')?.value, 10);
         if (inputVal && inputVal > 0) wizardState.durationDays = inputVal;
+        const dateVal = document.getElementById('wizStartDateInput')?.value;
+        if (dateVal) wizardState.startDate = dateVal;
+
         wizardState.step = 4;
-        addMessage(`📅 Trip Duration: <strong>${wizardState.durationDays} Days</strong>`, 'user');
+        addMessage(`📅 Departure Date: <strong>${wizardState.startDate}</strong> | Duration: <strong>${wizardState.durationDays} Days</strong>`, 'user');
         renderWizardStep4();
     });
 }
@@ -1240,13 +1258,14 @@ function renderWizardStep5() {
         wizardState.active = false;
         const vibesText = wizardState.vibes.length > 0 ? wizardState.vibes.join(', ') : 'Balanced sightseeing & leisure';
         
-        const finalPrompt = `Plan a ${wizardState.durationDays}-day trip from ${wizardState.origin} to ${wizardState.destination} for ${wizardState.travelers} traveler(s). Budget tier preference: ${wizardState.budgetTier}. Primary travel interests: ${vibesText}. Include live weather forecast, flight/train options, hotel recommendations matching the ${wizardState.budgetTier} budget tier, and day-by-day itinerary with booking links.`;
+        const finalPrompt = `Plan a ${wizardState.durationDays}-day trip starting on ${wizardState.startDate} from ${wizardState.origin} to ${wizardState.destination} for ${wizardState.travelers} traveler(s). Budget tier preference: ${wizardState.budgetTier}. Primary travel interests: ${vibesText}. Include live weather forecast for ${wizardState.startDate}, flight/train options, hotel recommendations matching the ${wizardState.budgetTier} budget tier, and day-by-day itinerary with booking links.`;
 
-        addMessage(`✨ Generating tailored itinerary for <strong>${wizardState.origin} ✈️ ${wizardState.destination}</strong> (${wizardState.durationDays} Days, ${wizardState.travelers} Traveler(s), ${wizardState.budgetTier.toUpperCase()} budget)...`, 'user');
+        addMessage(`✨ Generating tailored itinerary for <strong>${wizardState.origin} ✈️ ${wizardState.destination}</strong> starting <strong>${wizardState.startDate}</strong> (${wizardState.durationDays} Days, ${wizardState.travelers} Traveler(s), ${wizardState.budgetTier.toUpperCase()} budget)...`, 'user');
         
         sendMessage(finalPrompt, {
             destination: wizardState.destination,
             origin: wizardState.origin,
+            startDate: wizardState.startDate,
             budgetTier: wizardState.budgetTier,
             travelers: wizardState.travelers,
             durationDays: wizardState.durationDays
