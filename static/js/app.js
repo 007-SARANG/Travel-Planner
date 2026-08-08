@@ -225,51 +225,52 @@ function initEventListeners() {
         handleCurrencyChange(e.target.value);
     });
 
-    // Send Message
+    // Send Message - Launches Guided Wizard pre-filled with search input
     const sendBtn = document.getElementById('sendBtn');
     const input = document.getElementById('messageInput');
     
-    sendBtn?.addEventListener('click', handleSendMessage);
+    const triggerSearchWizard = () => {
+        const val = input?.value.trim();
+        if (val) {
+            startWizardFlow({ destination: val });
+            input.value = '';
+        } else {
+            startWizardFlow();
+        }
+    };
+    
+    sendBtn?.addEventListener('click', triggerSearchWizard);
     input?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            handleSendMessage();
+            triggerSearchWizard();
         }
     });
 
     // Feature Cards
     document.querySelectorAll('.feature-card').forEach(card => {
         card.addEventListener('click', () => {
-            const category = card.querySelector('h3')?.textContent;
-            if (category) {
-                document.getElementById('messageInput').value = `Show me ${category.toLowerCase()} options`;
-                document.getElementById('messageInput').focus();
-            }
+            startWizardFlow();
         });
     });
 
-    // Destination Cards
+    // Destination Cards & Explore Buttons - Pre-fills destination in Wizard Step 1!
     document.querySelectorAll('.destination-card').forEach(card => {
         card.addEventListener('click', () => {
             const destination = card.dataset.destination;
             if (destination) {
-                const msg = `Plan a trip to ${destination}`;
-                document.getElementById('messageInput').value = msg;
-                handleSendMessage();
+                startWizardFlow({ destination });
             }
         });
     });
 
-    // Explore Buttons
     document.querySelectorAll('.explore-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const card = btn.closest('.destination-card');
             const destination = card?.dataset.destination;
             if (destination) {
-                const msg = `Plan a trip to ${destination}`;
-                document.getElementById('messageInput').value = msg;
-                handleSendMessage();
+                startWizardFlow({ destination });
             }
         });
     });
@@ -277,9 +278,8 @@ function initEventListeners() {
     // Back to Home
     document.getElementById('backToHome')?.addEventListener('click', showHome);
 
-    // Reset/New Trip & Guided Planner Wizard
-    document.getElementById('resetBtn')?.addEventListener('click', startWizardFlow);
-    document.getElementById('startWizardBtn')?.addEventListener('click', startWizardFlow);
+    // Reset / New Trip Button
+    document.getElementById('resetBtn')?.addEventListener('click', () => startWizardFlow());
 
     // History
     document.getElementById('historyToggle')?.addEventListener('click', toggleSidebar);
@@ -513,15 +513,16 @@ function handleSendMessage() {
     sendMessage(fullMessage);
 }
 
-async function sendMessage(message) {
+async function sendMessage(message, extraData = {}) {
     showLoading();
     updateProgress(1);
 
     try {
+        const payload = Object.assign({ message }, extraData);
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message })
+            body: JSON.stringify(payload)
         });
 
         updateProgress(2);
@@ -874,7 +875,7 @@ let wizardState = {
     vibes: ['Beach', 'Relaxation']
 };
 
-async function startWizardFlow() {
+async function startWizardFlow(initialOptions = {}) {
     try {
         await fetch('/api/reset', { method: 'POST' });
     } catch (error) {
@@ -885,24 +886,27 @@ async function startWizardFlow() {
     wizardState = {
         active: true,
         step: 1,
-        origin: 'Mumbai',
-        destination: 'Goa',
-        travelers: 2,
-        durationDays: 5,
-        budgetTier: 'comfort',
-        vibes: ['Beach', 'Relaxation']
+        origin: initialOptions.origin || 'Mumbai',
+        destination: initialOptions.destination || 'Goa',
+        travelers: initialOptions.travelers || 2,
+        durationDays: initialOptions.durationDays || 5,
+        budgetTier: initialOptions.budgetTier || 'comfort',
+        vibes: initialOptions.vibes || ['Beach', 'Relaxation']
     };
 
     showChat();
     const chatContainer = document.getElementById('chatContainer');
     if (chatContainer) chatContainer.innerHTML = '';
 
-    renderWizardStep1();
+    renderWizardStep1(initialOptions.destination);
 }
 
 // Step 1: Origin & Destination
-function renderWizardStep1() {
-    addMessage("✨ Welcome to TripWise Guided Planner! Let's build your dream trip step-by-step.", 'assistant');
+function renderWizardStep1(prefilledDest) {
+    const greeting = prefilledDest 
+        ? `✨ Great choice! Let's plan your trip to <strong>${prefilledDest}</strong> step-by-step.`
+        : `✨ Welcome to TripWise Guided Planner! Let's build your dream trip step-by-step.`;
+    addMessage(greeting, 'assistant');
     
     const container = document.getElementById('chatContainer');
     const stepDiv = document.createElement('div');
@@ -1236,11 +1240,17 @@ function renderWizardStep5() {
         wizardState.active = false;
         const vibesText = wizardState.vibes.length > 0 ? wizardState.vibes.join(', ') : 'Balanced sightseeing & leisure';
         
-        const finalPrompt = `Plan a ${wizardState.durationDays}-day trip from ${wizardState.origin} to ${wizardState.destination} for ${wizardState.travelers} traveler(s). Budget tier preference: ${wizardState.budgetTier}. Primary travel interests: ${vibesText}. Include weather forecast, flight/train options, hotel recommendations, and day-by-day itinerary with booking links.`;
+        const finalPrompt = `Plan a ${wizardState.durationDays}-day trip from ${wizardState.origin} to ${wizardState.destination} for ${wizardState.travelers} traveler(s). Budget tier preference: ${wizardState.budgetTier}. Primary travel interests: ${vibesText}. Include live weather forecast, flight/train options, hotel recommendations matching the ${wizardState.budgetTier} budget tier, and day-by-day itinerary with booking links.`;
 
         addMessage(`✨ Generating tailored itinerary for <strong>${wizardState.origin} ✈️ ${wizardState.destination}</strong> (${wizardState.durationDays} Days, ${wizardState.travelers} Traveler(s), ${wizardState.budgetTier.toUpperCase()} budget)...`, 'user');
         
-        sendMessage(finalPrompt);
+        sendMessage(finalPrompt, {
+            destination: wizardState.destination,
+            origin: wizardState.origin,
+            budgetTier: wizardState.budgetTier,
+            travelers: wizardState.travelers,
+            durationDays: wizardState.durationDays
+        });
     });
 }
 

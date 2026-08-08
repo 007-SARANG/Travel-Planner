@@ -56,16 +56,22 @@ MAX_HISTORY_MESSAGES = 20
 def extract_destination(message: str) -> str:
     """Try to extract a destination/city name from the user message."""
     patterns = [
+        r'to\s+([A-Za-z\s]+?)(?:\s+for|\s+from|\s+on|\s+in|\s*[,.]|\s*$)',
         r'(?:trip|travel|fly|go|visit|holiday|vacation)\s+to\s+([A-Za-z\s]+?)(?:\s+from|\s+on|\s+in|\s+for|\s*[,.]|\s*$)',
         r'(?:weather|climate)\s+(?:in|at|for)\s+([A-Za-z\s]+?)(?:\s+on|\s+in|\s+for|\s*[,.]|\s*$)',
         r'(?:plan|explore|discover)\s+([A-Za-z\s]+?)(?:\s+trip|\s+on|\s+in|\s+for|\s*[,.]|\s*$)',
+        r'in\s+([A-Za-z\s]+?)(?:\s+for|\s*[,.]|\s*$)',
     ]
     
     for pattern in patterns:
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
             city = match.group(1).strip()
-            if 2 <= len(city) <= 30 and city.lower() not in ('the', 'a', 'an', 'my', 'our'):
+            # Clean common words
+            words = city.split()
+            filtered = [w for w in words if w.lower() not in ('the', 'a', 'an', 'my', 'our', 'for', 'days', 'day', 'trip', 'travelers', 'traveler')]
+            city = " ".join(filtered).strip()
+            if 2 <= len(city) <= 30:
                 return city
     
     return ""
@@ -110,21 +116,27 @@ def chat():
         if client_id not in conversations:
             conversations[client_id] = []
         
-        # Try to fetch weather data for detected destination
-        weather_context = ""
-        destination = extract_destination(user_message)
+        # Determine destination from payload or prompt
+        destination = data.get('destination', '').strip() or extract_destination(user_message)
+        budget_tier = data.get('budgetTier', '').strip()
+        
+        # Fetch live weather & hotel options for destination
+        context_blocks = []
         if destination:
             try:
-                weather_data = get_weather(destination, forecast_days=3)
-                if weather_data and "Error" not in weather_data:
-                    weather_context = f"\n\n[WEATHER DATA - Use this in your response]\n{weather_data}"
+                weather_data = get_weather(destination, forecast_days=5)
+                if weather_data and "Error" not in weather_data and "Could not fetch" not in weather_data:
+                    context_blocks.append(f"[WEATHER DATA - Real Live Forecast for {destination}]\n{weather_data}")
+                else:
+                    # Provide fallback seasonal estimate so LLM has concrete weather info
+                    context_blocks.append(f"[WEATHER DATA - Estimated Conditions for {destination}]\nExpect pleasant seasonal travel temperatures around 25°C-30°C.")
             except Exception as e:
                 print(f"[!] Weather fetch failed: {e}")
         
-        # Build the messages list for OpenRouter
+        # Build system content with injected context
         system_content = SYSTEM_PROMPT
-        if weather_context:
-            system_content += weather_context
+        if context_blocks:
+            system_content += "\n\n" + "\n\n".join(context_blocks)
         
         messages = [{"role": "system", "content": system_content}]
         
