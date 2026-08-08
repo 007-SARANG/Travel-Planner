@@ -3,6 +3,7 @@ Flask Web Server for AI Travel Planner with REST API endpoints.
 """
 import asyncio
 import uuid
+import time
 from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -33,6 +34,10 @@ runner = Runner(
 
 # Store active sessions
 active_sessions = {}
+
+# Rate limiting: track last request time per client
+client_last_request = {}
+MIN_REQUEST_INTERVAL = 5  # seconds between requests per client
 
 
 def async_route(f):
@@ -92,6 +97,19 @@ async def chat():
             client_id = str(uuid.uuid4())
             session['client_id'] = client_id
         
+        # Per-client rate limiting to prevent burning through API quota
+        now = time.time()
+        last_req = client_last_request.get(client_id, 0)
+        if now - last_req < MIN_REQUEST_INTERVAL:
+            wait_time = int(MIN_REQUEST_INTERVAL - (now - last_req)) + 1
+            return jsonify({
+                'response': f"Please wait {wait_time} seconds before sending another request.",
+                'session_id': client_id,
+                'rate_limited': True,
+                'retry_after': wait_time
+            })
+        client_last_request[client_id] = now
+        
         # Get or create session IDs
         if client_id not in active_sessions:
             user_id = "user_" + str(uuid.uuid4())
@@ -118,34 +136,53 @@ async def chat():
             parts=[types.Part(text=user_message)]
         )
         
-        # Run the agent and collect response
+        # Run the agent with automatic retry on rate limits
+        max_retries = 3
         response_text = []
-        try:
-            async for event in runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=message
-            ):
-                if hasattr(event, 'content') and event.content:
-                    for part in event.content.parts:
-                        if hasattr(part, 'text') and part.text:
-                            response_text.append(part.text)
-        except Exception as e:
-            error_msg = str(e)
-            print(f"[!] Agent execution error: {error_msg}")
-            import traceback
-            traceback.print_exc()
-            
-            # Handle rate limit errors specifically
-            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "rate" in error_msg.lower():
-                response_text = ["I'm currently experiencing high demand. Please wait 30 seconds and try again. (Rate limit reached)"]
-            # Provide more helpful error message
-            elif "model" in error_msg.lower() or "not found" in error_msg.lower():
-                response_text = ["Sorry, there's an issue with the AI model configuration. Please check the server logs."]
-            elif "api" in error_msg.lower() or "key" in error_msg.lower() or "auth" in error_msg.lower():
-                response_text = ["API authentication issue. Please check your GOOGLE_API_KEY in the .env file."]
-            else:
-                response_text = [f"I encountered an issue: {error_msg}. Please try rephrasing your query."]
+        
+        for attempt in range(max_retries):
+            response_text = []
+            try:
+                async for event in runner.run_async(
+                    user_id=user_id,
+                    session_id=session_id,
+                    new_message=message
+                ):
+                    if hasattr(event, 'content') and event.content:
+                        for part in event.content.parts:
+                            if hasattr(part, 'text') and part.text:
+                                response_text.append(part.text)
+                # Success - break out of retry loop
+                break
+            except Exception as e:
+                error_msg = str(e)
+                is_rate_limit = (
+                    "429" in error_msg
+                    or "RESOURCE_EXHAUSTED" in error_msg
+                    or "rate" in error_msg.lower()
+                    or "quota" in error_msg.lower()
+                )
+                
+                if is_rate_limit and attempt < max_retries - 1:
+                    wait_seconds = 2 ** (attempt + 1)  # 2s, 4s, 8s
+                    print(f"[!] Rate limited (attempt {attempt + 1}/{max_retries}), retrying in {wait_seconds}s...")
+                    await asyncio.sleep(wait_seconds)
+                    continue
+                
+                # Final attempt failed or non-rate-limit error
+                print(f"[!] Agent execution error: {error_msg}")
+                import traceback
+                traceback.print_exc()
+                
+                if is_rate_limit:
+                    response_text = ["The AI service is experiencing high demand. Please wait a moment and try again."]
+                elif "model" in error_msg.lower() or "not found" in error_msg.lower():
+                    response_text = ["Sorry, there's an issue with the AI model configuration. Please check the server logs."]
+                elif "api" in error_msg.lower() or "key" in error_msg.lower() or "auth" in error_msg.lower():
+                    response_text = ["API authentication issue. Please check your GOOGLE_API_KEY in the .env file."]
+                else:
+                    response_text = [f"I encountered an issue: {error_msg}. Please try rephrasing your query."]
+                break
         
         full_response = ''.join(response_text)
         

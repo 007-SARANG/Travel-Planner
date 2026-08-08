@@ -529,6 +529,18 @@ async function sendMessage(message) {
 
         const data = await response.json();
         
+        // Handle server-side rate limiting with auto-retry
+        if (data.rate_limited) {
+            const retryAfter = data.retry_after || 5;
+            hideLoading();
+            hideProgress();
+            showToast(`Rate limited. Auto-retrying in ${retryAfter}s...`, 'error');
+            setTimeout(() => {
+                sendMessage(message);
+            }, retryAfter * 1000);
+            return;
+        }
+        
         updateProgress(3);
         
         if (data.error) {
