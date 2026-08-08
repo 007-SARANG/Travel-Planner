@@ -277,8 +277,9 @@ function initEventListeners() {
     // Back to Home
     document.getElementById('backToHome')?.addEventListener('click', showHome);
 
-    // Reset/New Trip
-    document.getElementById('resetBtn')?.addEventListener('click', resetSession);
+    // Reset/New Trip & Guided Planner Wizard
+    document.getElementById('resetBtn')?.addEventListener('click', startWizardFlow);
+    document.getElementById('startWizardBtn')?.addEventListener('click', startWizardFlow);
 
     // History
     document.getElementById('historyToggle')?.addEventListener('click', toggleSidebar);
@@ -859,11 +860,410 @@ function showToast(message, type = 'info') {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 🧙‍♂️ Interactive Trip Planner Wizard
+// ═══════════════════════════════════════════════════════════════════════════
+
+let wizardState = {
+    active: false,
+    step: 1,
+    origin: 'Mumbai',
+    destination: 'Goa',
+    travelers: 2,
+    durationDays: 5,
+    budgetTier: 'comfort',
+    vibes: ['Beach', 'Relaxation']
+};
+
+async function startWizardFlow() {
+    try {
+        await fetch('/api/reset', { method: 'POST' });
+    } catch (error) {
+        console.error('Reset error:', error);
+    }
+
+    sessionId = null;
+    wizardState = {
+        active: true,
+        step: 1,
+        origin: 'Mumbai',
+        destination: 'Goa',
+        travelers: 2,
+        durationDays: 5,
+        budgetTier: 'comfort',
+        vibes: ['Beach', 'Relaxation']
+    };
+
+    showChat();
+    const chatContainer = document.getElementById('chatContainer');
+    if (chatContainer) chatContainer.innerHTML = '';
+
+    renderWizardStep1();
+}
+
+// Step 1: Origin & Destination
+function renderWizardStep1() {
+    addMessage("✨ Welcome to TripWise Guided Planner! Let's build your dream trip step-by-step.", 'assistant');
+    
+    const container = document.getElementById('chatContainer');
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'message assistant wizard-message';
+    
+    stepDiv.innerHTML = `
+        <div class="message-content">
+            <div class="wizard-step-header">
+                <i class="fas fa-map-marker-alt"></i> Step 1: Route & Cities
+            </div>
+            <p>Where are you starting from and where would you like to go?</p>
+            <div class="wizard-card">
+                <div class="wizard-route-row">
+                    <div class="wizard-input-group">
+                        <label><i class="fas fa-plane-departure"></i> Origin City</label>
+                        <input type="text" id="wizOrigin" value="${wizardState.origin}" placeholder="e.g. Delhi, Mumbai, London">
+                    </div>
+                    <button class="btn-swap-route" id="wizSwapBtn" title="Swap Cities">
+                        <i class="fas fa-exchange-alt"></i>
+                    </button>
+                    <div class="wizard-input-group">
+                        <label><i class="fas fa-plane-arrival"></i> Destination City</label>
+                        <input type="text" id="wizDestination" value="${wizardState.destination}" placeholder="e.g. Goa, Paris, Bali">
+                    </div>
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-wizard-next" id="wizNextStep1">
+                        <span>Next: Travelers</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(stepDiv);
+    container.scrollTop = container.scrollHeight;
+
+    document.getElementById('wizSwapBtn')?.addEventListener('click', () => {
+        const o = document.getElementById('wizOrigin');
+        const d = document.getElementById('wizDestination');
+        if (o && d) {
+            const temp = o.value;
+            o.value = d.value;
+            d.value = temp;
+        }
+    });
+
+    document.getElementById('wizNextStep1')?.addEventListener('click', () => {
+        const o = document.getElementById('wizOrigin')?.value.trim();
+        const d = document.getElementById('wizDestination')?.value.trim();
+        if (!o || !d) {
+            showToast('Please enter both origin and destination cities', 'error');
+            return;
+        }
+        wizardState.origin = o;
+        wizardState.destination = d;
+        wizardState.step = 2;
+        addMessage(`📍 Flying/Traveling from <strong>${o}</strong> to <strong>${d}</strong>`, 'user');
+        renderWizardStep2();
+    });
+}
+
+// Step 2: Traveler Count
+function renderWizardStep2() {
+    const container = document.getElementById('chatContainer');
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'message assistant wizard-message';
+    
+    stepDiv.innerHTML = `
+        <div class="message-content">
+            <div class="wizard-step-header">
+                <i class="fas fa-users"></i> Step 2: Travelers
+            </div>
+            <p>How many people are going on this trip?</p>
+            <div class="wizard-card">
+                <div class="wizard-chip-group">
+                    <button class="wizard-chip ${wizardState.travelers === 1 ? 'selected' : ''}" data-count="1">👤 Solo (1)</button>
+                    <button class="wizard-chip ${wizardState.travelers === 2 ? 'selected' : ''}" data-count="2">👩‍❤️‍👨 Couple (2)</button>
+                    <button class="wizard-chip ${wizardState.travelers === 4 ? 'selected' : ''}" data-count="4">👨‍👩‍👧‍👦 Family (4)</button>
+                    <button class="wizard-chip ${wizardState.travelers === 6 ? 'selected' : ''}" data-count="6">👥 Group (6+)</button>
+                </div>
+                <div class="traveler-selector" style="margin-bottom: var(--spacing-md);">
+                    <span>Total Travelers: </span>
+                    <button class="traveler-btn" id="wizTravelerMinus">−</button>
+                    <span id="wizTravelerVal">${wizardState.travelers}</span>
+                    <button class="traveler-btn" id="wizTravelerPlus">+</button>
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-wizard-next" id="wizNextStep2">
+                        <span>Next: Duration</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(stepDiv);
+    container.scrollTop = container.scrollHeight;
+
+    stepDiv.querySelectorAll('.wizard-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            stepDiv.querySelectorAll('.wizard-chip').forEach(c => c.classList.remove('selected'));
+            chip.classList.add('selected');
+            wizardState.travelers = parseInt(chip.dataset.count, 10);
+            const valEl = document.getElementById('wizTravelerVal');
+            if (valEl) valEl.textContent = wizardState.travelers;
+        });
+    });
+
+    document.getElementById('wizTravelerMinus')?.addEventListener('click', () => {
+        wizardState.travelers = Math.max(1, wizardState.travelers - 1);
+        const valEl = document.getElementById('wizTravelerVal');
+        if (valEl) valEl.textContent = wizardState.travelers;
+    });
+
+    document.getElementById('wizTravelerPlus')?.addEventListener('click', () => {
+        wizardState.travelers = Math.min(20, wizardState.travelers + 1);
+        const valEl = document.getElementById('wizTravelerVal');
+        if (valEl) valEl.textContent = wizardState.travelers;
+    });
+
+    document.getElementById('wizNextStep2')?.addEventListener('click', () => {
+        wizardState.step = 3;
+        addMessage(`👥 <strong>${wizardState.travelers}</strong> traveler(s)`, 'user');
+        renderWizardStep3();
+    });
+}
+
+// Step 3: Duration
+function renderWizardStep3() {
+    const container = document.getElementById('chatContainer');
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'message assistant wizard-message';
+    
+    stepDiv.innerHTML = `
+        <div class="message-content">
+            <div class="wizard-step-header">
+                <i class="fas fa-calendar-alt"></i> Step 3: Duration & Days
+            </div>
+            <p>How many days will your journey be?</p>
+            <div class="wizard-card">
+                <div class="wizard-chip-group">
+                    <button class="wizard-chip ${wizardState.durationDays === 3 ? 'selected' : ''}" data-days="3">⚡ Weekend (3 Days)</button>
+                    <button class="wizard-chip ${wizardState.durationDays === 5 ? 'selected' : ''}" data-days="5">🏖️ Standard (5 Days)</button>
+                    <button class="wizard-chip ${wizardState.durationDays === 7 ? 'selected' : ''}" data-days="7">🗺️ Full Week (7 Days)</button>
+                    <button class="wizard-chip ${wizardState.durationDays === 10 ? 'selected' : ''}" data-days="10">🌌 Explorer (10 Days)</button>
+                </div>
+                <div class="wizard-input-group" style="max-width: 200px; margin-bottom: var(--spacing-md);">
+                    <label>Or Enter Custom Days:</label>
+                    <input type="number" id="wizDaysInput" min="1" max="30" value="${wizardState.durationDays}">
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-wizard-next" id="wizNextStep3">
+                        <span>Next: Budget Tiers</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(stepDiv);
+    container.scrollTop = container.scrollHeight;
+
+    stepDiv.querySelectorAll('.wizard-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            stepDiv.querySelectorAll('.wizard-chip').forEach(c => c.classList.remove('selected'));
+            chip.classList.add('selected');
+            wizardState.durationDays = parseInt(chip.dataset.days, 10);
+            const inputEl = document.getElementById('wizDaysInput');
+            if (inputEl) inputEl.value = wizardState.durationDays;
+        });
+    });
+
+    document.getElementById('wizDaysInput')?.addEventListener('change', (e) => {
+        const val = parseInt(e.target.value, 10);
+        if (val && val > 0) wizardState.durationDays = val;
+    });
+
+    document.getElementById('wizNextStep3')?.addEventListener('click', () => {
+        const inputVal = parseInt(document.getElementById('wizDaysInput')?.value, 10);
+        if (inputVal && inputVal > 0) wizardState.durationDays = inputVal;
+        wizardState.step = 4;
+        addMessage(`📅 Trip Duration: <strong>${wizardState.durationDays} Days</strong>`, 'user');
+        renderWizardStep4();
+    });
+}
+
+// Step 4: Dynamic Budget Tiers with Price Estimation
+function renderWizardStep4() {
+    const container = document.getElementById('chatContainer');
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'message assistant wizard-message';
+    
+    // Dynamic cost calculation based on route (domestic vs international), duration, and travelers
+    const isIntl = isInternationalRoute(wizardState.origin, wizardState.destination);
+    const basePerDayBudget = isIntl ? 5000 : 1800;
+    const basePerDayComfort = isIntl ? 12000 : 4500;
+    const basePerDayLuxury = isIntl ? 30000 : 12000;
+
+    const baseTransportBudget = isIntl ? 25000 : 2500;
+    const baseTransportComfort = isIntl ? 55000 : 7000;
+    const baseTransportLuxury = isIntl ? 120000 : 18000;
+
+    const totalEstBudgetINR = (basePerDayBudget * wizardState.durationDays + baseTransportBudget) * wizardState.travelers;
+    const totalEstComfortINR = (basePerDayComfort * wizardState.durationDays + baseTransportComfort) * wizardState.travelers;
+    const totalEstLuxuryINR = (basePerDayLuxury * wizardState.durationDays + baseTransportLuxury) * wizardState.travelers;
+
+    const estBudgetStr = convertPrice(totalEstBudgetINR);
+    const estComfortStr = convertPrice(totalEstComfortINR);
+    const estLuxuryStr = convertPrice(totalEstLuxuryINR);
+
+    stepDiv.innerHTML = `
+        <div class="message-content">
+            <div class="wizard-step-header">
+                <i class="fas fa-wallet"></i> Step 4: Choose Budget Tier
+            </div>
+            <p>Here are calculated total price estimates for ${wizardState.travelers} traveler(s) over ${wizardState.durationDays} days from <strong>${wizardState.origin}</strong> to <strong>${wizardState.destination}</strong>:</p>
+            <div class="wizard-card" style="max-width: 700px;">
+                <div class="budget-options-grid">
+                    <div class="budget-tier-card tier-budget ${wizardState.budgetTier === 'budget' ? 'selected' : ''}" data-tier="budget">
+                        <div>
+                            <span class="budget-badge">Saver</span>
+                            <div class="budget-tier-name">Backpacker / Budget</div>
+                            <div class="budget-price-est">~ ${estBudgetStr}</div>
+                            <p class="budget-tier-desc">Hostels & 2★ Stay • Express Trains & Buses • Local Street Food & Free Attractions</p>
+                        </div>
+                    </div>
+                    <div class="budget-tier-card tier-comfort ${wizardState.budgetTier === 'comfort' ? 'selected' : ''}" data-tier="comfort">
+                        <div>
+                            <span class="budget-badge">Popular</span>
+                            <div class="budget-tier-name">Comfort / Mid-Range</div>
+                            <div class="budget-price-est">~ ${estComfortStr}</div>
+                            <p class="budget-tier-desc">3-4★ Boutique Hotels • Economy Flights & Cabs • Guided Tours & Top Dining</p>
+                        </div>
+                    </div>
+                    <div class="budget-tier-card tier-luxury ${wizardState.budgetTier === 'luxury' ? 'selected' : ''}" data-tier="luxury">
+                        <div>
+                            <span class="budget-badge">VIP</span>
+                            <div class="budget-tier-name">Ultra Luxury</div>
+                            <div class="budget-price-est">~ ${estLuxuryStr}</div>
+                            <p class="budget-tier-desc">5★ Luxury Resorts • Business Flights & Chauffeur • Premium Experiences & Fine Dining</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-wizard-next" id="wizNextStep4">
+                        <span>Next: Travel Vibes</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(stepDiv);
+    container.scrollTop = container.scrollHeight;
+
+    stepDiv.querySelectorAll('.budget-tier-card').forEach(card => {
+        card.addEventListener('click', () => {
+            stepDiv.querySelectorAll('.budget-tier-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            wizardState.budgetTier = card.dataset.tier;
+        });
+    });
+
+    document.getElementById('wizNextStep4')?.addEventListener('click', () => {
+        wizardState.step = 5;
+        const tierLabels = { budget: 'Saver/Budget', comfort: 'Comfort/Mid-Range', luxury: 'Ultra Luxury' };
+        addMessage(`💳 Selected Budget Tier: <strong>${tierLabels[wizardState.budgetTier] || wizardState.budgetTier}</strong>`, 'user');
+        renderWizardStep5();
+    });
+}
+
+// Step 5: Travel Vibes & Final Prompt Generation
+function renderWizardStep5() {
+    const container = document.getElementById('chatContainer');
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'message assistant wizard-message';
+
+    const vibesList = [
+        { id: 'Beach', label: '🏖️ Beach & Tropics' },
+        { id: 'Adventure', label: '🏔️ Trekking & Adventure' },
+        { id: 'Culture', label: '🏛️ History & Culture' },
+        { id: 'Foodie', label: '🍕 Local Cuisine & Foodie' },
+        { id: 'Relaxation', label: '🧘 Spa & Relaxation' },
+        { id: 'Nightlife', label: '🌃 Party & Nightlife' },
+        { id: 'Shopping', label: '🛍️ Markets & Shopping' },
+        { id: 'Sightseeing', label: '📸 Top Sightseeing' }
+    ];
+
+    const chipsHTML = vibesList.map(v => {
+        const sel = wizardState.vibes.includes(v.id) ? 'selected' : '';
+        return `<button class="wizard-chip ${sel}" data-vibe="${v.id}">${v.label}</button>`;
+    }).join('');
+    
+    stepDiv.innerHTML = `
+        <div class="message-content">
+            <div class="wizard-step-header">
+                <i class="fas fa-sparkles"></i> Step 5: Travel Style & Interests
+            </div>
+            <p>Select what kind of experience you are looking for:</p>
+            <div class="wizard-card">
+                <div class="wizard-chip-group">
+                    ${chipsHTML}
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-wizard-next" id="wizFinalSubmit">
+                        <i class="fas fa-magic"></i>
+                        <span>Generate Custom Trip Plan</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(stepDiv);
+    container.scrollTop = container.scrollHeight;
+
+    stepDiv.querySelectorAll('.wizard-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const vibe = chip.dataset.vibe;
+            if (chip.classList.contains('selected')) {
+                chip.classList.remove('selected');
+                wizardState.vibes = wizardState.vibes.filter(v => v !== vibe);
+            } else {
+                chip.classList.add('selected');
+                wizardState.vibes.push(vibe);
+            }
+        });
+    });
+
+    document.getElementById('wizFinalSubmit')?.addEventListener('click', () => {
+        wizardState.active = false;
+        const vibesText = wizardState.vibes.length > 0 ? wizardState.vibes.join(', ') : 'Balanced sightseeing & leisure';
+        
+        const finalPrompt = `Plan a ${wizardState.durationDays}-day trip from ${wizardState.origin} to ${wizardState.destination} for ${wizardState.travelers} traveler(s). Budget tier preference: ${wizardState.budgetTier}. Primary travel interests: ${vibesText}. Include weather forecast, flight/train options, hotel recommendations, and day-by-day itinerary with booking links.`;
+
+        addMessage(`✨ Generating tailored itinerary for <strong>${wizardState.origin} ✈️ ${wizardState.destination}</strong> (${wizardState.durationDays} Days, ${wizardState.travelers} Traveler(s), ${wizardState.budgetTier.toUpperCase()} budget)...`, 'user');
+        
+        sendMessage(finalPrompt);
+    });
+}
+
+function isInternationalRoute(origin, destination) {
+    const indianCities = ['mumbai', 'delhi', 'bangalore', 'goa', 'jaipur', 'kolkata', 'chennai', 'hyderabad', 'kochi', 'pune', 'ahmedabad', 'varanasi', 'agra', 'shimla', 'manali', 'udaipur'];
+    const destLower = destination.toLowerCase();
+    const origLower = origin.toLowerCase();
+    const origIndian = indianCities.some(c => origLower.includes(c));
+    const destIndian = indianCities.some(c => destLower.includes(c));
+    
+    if (origIndian && !destIndian && !['india'].some(c => destLower.includes(c))) return true;
+    if (!origIndian && destIndian) return true;
+    return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 🎉 Export for global use
 // ═══════════════════════════════════════════════════════════════════════════
 
 window.TravelAI = {
     showToast,
     toggleTheme,
-    resetSession
+    resetSession,
+    startWizardFlow
 };
+
