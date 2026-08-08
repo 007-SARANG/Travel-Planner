@@ -128,6 +128,17 @@ function updateAllPrices() {
     updateFeatureCardPrices();
     // Update destination card prices
     updateDestinationPrices();
+    // Update dynamic price tags in generated itineraries
+    updateDynamicPriceTags();
+}
+
+function updateDynamicPriceTags() {
+    document.querySelectorAll('.dynamic-price').forEach(el => {
+        const inr = parseFloat(el.dataset.inr);
+        if (!isNaN(inr)) {
+            el.textContent = convertPrice(inr);
+        }
+    });
 }
 
 function updateFeatureCardPrices() {
@@ -584,6 +595,7 @@ function addMessage(content, role) {
         
         typewriterEffect(contentDiv, content, () => {
             contentDiv.classList.remove('typing');
+            postProcessAssistantMessage(messageDiv, content);
         });
     } else {
         // Instant display for user messages
@@ -1286,6 +1298,212 @@ function isInternationalRoute(origin, destination) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 🎨 Interactive Post-Processor (Timeline, Cost Breakdown, Dynamic Prices, Refine Chips)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function postProcessAssistantMessage(messageDiv, rawText) {
+    const contentDiv = messageDiv.querySelector('.message-content');
+    if (!contentDiv) return;
+
+    // 1. Tag Dynamic Prices
+    tagDynamicPrices(contentDiv);
+
+    // 2. Transform Day-by-Day itinerary into expandable Timeline Cards
+    transformItineraryTimeline(contentDiv);
+
+    // 3. Inject Category Cost Breakdown Widget if budget section or itinerary is present
+    injectCostBreakdown(contentDiv, rawText);
+
+    // 4. Append "Refine My Plan" Quick Action Chips
+    appendRefineChips(contentDiv);
+
+    // Update dynamic prices to current active currency
+    updateDynamicPriceTags();
+}
+
+function tagDynamicPrices(element) {
+    let html = element.innerHTML;
+    
+    // Tag INR prices: ₹15,000 or ₹ 15000
+    html = html.replace(/₹\s?([\d,]+)/g, (match, amountStr) => {
+        const num = parseFloat(amountStr.replace(/,/g, ''));
+        if (isNaN(num)) return match;
+        return `<span class="dynamic-price" data-inr="${num}">${convertPrice(num)}</span>`;
+    });
+
+    // Tag USD prices: $250
+    html = html.replace(/\$\s?([\d,]+)/g, (match, amountStr) => {
+        const numUsd = parseFloat(amountStr.replace(/,/g, ''));
+        if (isNaN(numUsd)) return match;
+        const numInr = Math.round(numUsd / currencyRates['USD']);
+        return `<span class="dynamic-price" data-inr="${numInr}">${convertPrice(numInr)}</span>`;
+    });
+
+    element.innerHTML = html;
+}
+
+function transformItineraryTimeline(contentDiv) {
+    const headers = contentDiv.querySelectorAll('.md-h3, h3');
+    let dayHeaders = [];
+    headers.forEach(h => {
+        if (/Day\s+\d+/i.test(h.textContent)) {
+            dayHeaders.push(h);
+        }
+    });
+
+    if (dayHeaders.length === 0) return;
+
+    const timelineContainer = document.createElement('div');
+    timelineContainer.className = 'timeline-container';
+
+    dayHeaders.forEach((header, index) => {
+        const match = header.textContent.match(/Day\s+(\d+):?\s*(.*)/i);
+        const dayNum = match ? match[1] : (index + 1);
+        const dayTitle = match && match[2] ? match[2].trim() : header.textContent.trim();
+
+        let sibling = header.nextElementSibling;
+        let dayContentNodes = [];
+        while (sibling && !sibling.classList?.contains('md-h3') && !sibling.classList?.contains('md-h2') && sibling.tagName !== 'H3' && sibling.tagName !== 'H2') {
+            const current = sibling;
+            sibling = sibling.nextElementSibling;
+            dayContentNodes.push(current);
+        }
+
+        const dayCard = document.createElement('div');
+        dayCard.className = 'timeline-day-card';
+
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'timeline-day-header';
+        cardHeader.innerHTML = `
+            <div class="day-badge-title">
+                <span class="day-badge">Day ${dayNum}</span>
+                <span class="day-title-text">${dayTitle}</span>
+            </div>
+            <i class="fas fa-chevron-down timeline-toggle-icon"></i>
+        `;
+
+        const cardBody = document.createElement('div');
+        cardBody.className = 'timeline-body';
+
+        if (dayContentNodes.length > 0) {
+            dayContentNodes.forEach(node => cardBody.appendChild(node));
+        } else {
+            cardBody.innerHTML = `<div class="slot-content">Activities and recommendations for Day ${dayNum}.</div>`;
+        }
+
+        cardBody.querySelectorAll('strong').forEach(b => {
+            const txt = b.textContent.toLowerCase();
+            if (txt.includes('morning')) {
+                b.className = 'slot-badge slot-morning';
+            } else if (txt.includes('afternoon')) {
+                b.className = 'slot-badge slot-afternoon';
+            } else if (txt.includes('evening') || txt.includes('night')) {
+                b.className = 'slot-badge slot-evening';
+            }
+        });
+
+        cardHeader.addEventListener('click', () => {
+            dayCard.classList.toggle('collapsed');
+        });
+
+        dayCard.appendChild(cardHeader);
+        dayCard.appendChild(cardBody);
+
+        timelineContainer.appendChild(dayCard);
+        header.remove();
+    });
+
+    contentDiv.appendChild(timelineContainer);
+}
+
+function injectCostBreakdown(contentDiv, rawText) {
+    if (!/itinerary|budget|hotel|flight|day\s+1/i.test(rawText)) return;
+    if (contentDiv.querySelector('.cost-breakdown-card')) return;
+
+    let estTotalINR = 35000;
+    const priceMatches = rawText.match(/₹\s?([\d,]+)/g);
+    if (priceMatches && priceMatches.length > 0) {
+        const nums = priceMatches.map(m => parseFloat(m.replace(/[^\d]/g, ''))).filter(n => n > 2000 && n < 1000000);
+        if (nums.length > 0) {
+            estTotalINR = Math.max(...nums);
+        }
+    }
+
+    const transportINR = Math.round(estTotalINR * 0.35);
+    const hotelsINR = Math.round(estTotalINR * 0.40);
+    const diningINR = Math.round(estTotalINR * 0.15);
+    const activitiesINR = Math.round(estTotalINR * 0.10);
+
+    const costCard = document.createElement('div');
+    costCard.className = 'cost-breakdown-card';
+    costCard.innerHTML = `
+        <div class="cost-header">
+            <h4><i class="fas fa-chart-pie"></i> Estimated Category Cost Breakdown</h4>
+            <div class="cost-total-tag">Total ~ <span class="dynamic-price" data-inr="${estTotalINR}">${convertPrice(estTotalINR)}</span></div>
+        </div>
+        <div class="cost-categories-grid">
+            <div class="cost-category-row">
+                <div class="cost-category-info">
+                    <span class="cost-category-label"><i class="fas fa-plane"></i> Flights & Transit (35%)</span>
+                    <span class="cost-category-val"><span class="dynamic-price" data-inr="${transportINR}">${convertPrice(transportINR)}</span></span>
+                </div>
+                <div class="cost-bar-bg"><div class="cost-bar-fill fill-transport" style="width: 35%;"></div></div>
+            </div>
+            <div class="cost-category-row">
+                <div class="cost-category-info">
+                    <span class="cost-category-label"><i class="fas fa-hotel"></i> Hotels & Stay (40%)</span>
+                    <span class="cost-category-val"><span class="dynamic-price" data-inr="${hotelsINR}">${convertPrice(hotelsINR)}</span></span>
+                </div>
+                <div class="cost-bar-bg"><div class="cost-bar-fill fill-hotels" style="width: 40%;"></div></div>
+            </div>
+            <div class="cost-category-row">
+                <div class="cost-category-info">
+                    <span class="cost-category-label"><i class="fas fa-utensils"></i> Dining & Food (15%)</span>
+                    <span class="cost-category-val"><span class="dynamic-price" data-inr="${diningINR}">${convertPrice(diningINR)}</span></span>
+                </div>
+                <div class="cost-bar-bg"><div class="cost-bar-fill fill-dining" style="width: 15%;"></div></div>
+            </div>
+            <div class="cost-category-row">
+                <div class="cost-category-info">
+                    <span class="cost-category-label"><i class="fas fa-ticket-alt"></i> Activities & Sights (10%)</span>
+                    <span class="cost-category-val"><span class="dynamic-price" data-inr="${activitiesINR}">${convertPrice(activitiesINR)}</span></span>
+                </div>
+                <div class="cost-bar-bg"><div class="cost-bar-fill fill-activities" style="width: 10%;"></div></div>
+            </div>
+        </div>
+    `;
+
+    contentDiv.appendChild(costCard);
+}
+
+function appendRefineChips(contentDiv) {
+    if (contentDiv.querySelector('.refine-chips-wrapper')) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'refine-chips-wrapper';
+    wrapper.innerHTML = `
+        <div class="refine-title"><i class="fas fa-sliders-h"></i> Refine This Plan</div>
+        <div class="refine-chips-group">
+            <button class="refine-chip" data-prompt="Please adjust the itinerary to be more relaxed with fewer rushed activities.">🌿 More Relaxed</button>
+            <button class="refine-chip" data-prompt="Please suggest more budget-friendly hotel and transit options.">💰 Saver / Budget Options</button>
+            <button class="refine-chip" data-prompt="Please add top historical landmarks and cultural sights.">🏛️ Historical Landmarks</button>
+            <button class="refine-chip" data-prompt="Please suggest indoor attractions and rainy day alternatives.">🌧️ Rainy Day Options</button>
+            <button class="refine-chip" data-prompt="Please include top local street food and famous dining spots.">🍕 Foodie & Local Eats</button>
+        </div>
+    `;
+
+    wrapper.querySelectorAll('.refine-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const promptText = chip.dataset.prompt;
+            addMessage(chip.textContent, 'user');
+            sendMessage(promptText);
+        });
+    });
+
+    contentDiv.appendChild(wrapper);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 🎉 Export for global use
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1295,4 +1513,5 @@ window.TravelAI = {
     resetSession,
     startWizardFlow
 };
+
 
