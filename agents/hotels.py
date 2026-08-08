@@ -1,5 +1,5 @@
-from google.adk.agents import Agent
 from agents.utils import get_amadeus_client
+
 
 def search_hotels(city_code: str) -> str:
     """
@@ -62,15 +62,3 @@ def search_hotels(city_code: str) -> str:
             return "Amadeus API authentication failed. Check your credentials in .env file."
         else:
             return f"Hotel search error: {error_msg}"
-
-hotel_agent = Agent(
-    name="hotel_agent",
-    model="gemini-1.5-flash",
-    tools=[search_hotels],
-    instruction=(
-        "You search hotels using REAL Amadeus API data. "
-        "ALWAYS use proper IATA city codes (3 letters): DEL for Delhi, BOM for Mumbai, GOI for Goa, etc. "
-        "If user gives city name, convert it to IATA code first. "
-        "Present results with ratings and prices. NO fake data."
-    )
-)

@@ -1,5 +1,5 @@
-from google.adk.agents import Agent
 from agents.utils import get_amadeus_client
+
 
 def search_flights(origin_iata: str, destination_iata: str, departure_date: str) -> str:
     """
@@ -34,10 +34,3 @@ def search_flights(origin_iata: str, destination_iata: str, departure_date: str)
 
     except Exception as e:
         return f"Flight search failed: {str(e)}"
-
-flight_agent = Agent(
-    name="flight_agent",
-    model="gemini-1.5-flash",
-    tools=[search_flights],
-    instruction="You find flight options based on IATA codes."
-)

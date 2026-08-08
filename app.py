@@ -1,16 +1,17 @@
 """
 Flask Web Server for AI Travel Planner with REST API endpoints.
+Uses OpenRouter API (OpenAI-compatible) for LLM inference.
 """
 import asyncio
 import uuid
 import time
+import re
 from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 from dotenv import load_dotenv
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types
-from agents.root import root_agent
+from openai import OpenAI
+from agents.root import SYSTEM_PROMPT
+from agents.weather import get_weather
 import os
 from functools import wraps
 
@@ -24,20 +25,25 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True  # Force template reload
 app.config['DEBUG'] = True  # Enable debug mode
 CORS(app)
 
-# Initialize the runner with root agent
-session_service = InMemorySessionService()
-runner = Runner(
-    app_name="travel_planner",
-    agent=root_agent,
-    session_service=session_service
+# Initialize OpenRouter client (OpenAI-compatible)
+openrouter_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY", ""),
 )
 
-# Store active sessions
-active_sessions = {}
+# Model to use - "openrouter/auto" auto-routes to best available free model
+# You can also use specific free models like "google/gemma-2-9b-it:free"
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/auto")
+
+# Store active conversations (client_id -> list of messages)
+conversations = {}
 
 # Rate limiting: track last request time per client
 client_last_request = {}
-MIN_REQUEST_INTERVAL = 5  # seconds between requests per client
+MIN_REQUEST_INTERVAL = 3  # seconds between requests per client
+
+# Max conversation history to keep (to avoid token limits)
+MAX_HISTORY_MESSAGES = 20
 
 
 def async_route(f):
@@ -60,18 +66,24 @@ def async_route(f):
     return wrapper
 
 
-async def retry_async(func, max_retries=3, delay=1):
-    """Retry an async function with exponential backoff."""
-    last_error = None
-    for attempt in range(max_retries):
-        try:
-            return await func()
-        except Exception as e:
-            last_error = e
-            if attempt < max_retries - 1:
-                await asyncio.sleep(delay * (2 ** attempt))
-                print(f"[!] Retry attempt {attempt + 1}/{max_retries} after error: {str(e)}")
-    raise last_error
+def extract_destination(message: str) -> str:
+    """Try to extract a destination/city name from the user message."""
+    # Common patterns like "trip to X", "travel to X", "visit X", "weather in X"
+    patterns = [
+        r'(?:trip|travel|fly|go|visit|holiday|vacation)\s+to\s+([A-Za-z\s]+?)(?:\s+from|\s+on|\s+in|\s+for|\s*[,.]|\s*$)',
+        r'(?:weather|climate)\s+(?:in|at|for)\s+([A-Za-z\s]+?)(?:\s+on|\s+in|\s+for|\s*[,.]|\s*$)',
+        r'(?:plan|explore|discover)\s+([A-Za-z\s]+?)(?:\s+trip|\s+on|\s+in|\s+for|\s*[,.]|\s*$)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            city = match.group(1).strip()
+            # Filter out overly long matches or common non-city words
+            if 2 <= len(city) <= 30 and city.lower() not in ('the', 'a', 'an', 'my', 'our'):
+                return city
+    
+    return ""
 
 
 @app.route('/')
@@ -110,57 +122,63 @@ async def chat():
             })
         client_last_request[client_id] = now
         
-        # Get or create session IDs
-        if client_id not in active_sessions:
-            user_id = "user_" + str(uuid.uuid4())
-            session_id = "session_" + str(uuid.uuid4())
-            
-            # Create the session
-            await session_service.create_session(
-                app_name="travel_planner",
-                user_id=user_id,
-                session_id=session_id
-            )
-            
-            active_sessions[client_id] = {
-                'user_id': user_id,
-                'session_id': session_id
-            }
+        # Initialize conversation history if new client
+        if client_id not in conversations:
+            conversations[client_id] = []
         
-        user_id = active_sessions[client_id]['user_id']
-        session_id = active_sessions[client_id]['session_id']
+        # Try to fetch weather data for detected destination
+        weather_context = ""
+        destination = extract_destination(user_message)
+        if destination:
+            try:
+                weather_data = await get_weather(destination, forecast_days=3)
+                if weather_data and "Error" not in weather_data:
+                    weather_context = f"\n\n[WEATHER DATA - Use this in your response]\n{weather_data}"
+            except Exception as e:
+                print(f"[!] Weather fetch failed: {e}")
         
-        # Create message content
-        message = types.Content(
-            role="user",
-            parts=[types.Part(text=user_message)]
-        )
+        # Build the messages list for OpenRouter
+        # System prompt + weather context
+        system_content = SYSTEM_PROMPT
+        if weather_context:
+            system_content += weather_context
         
-        # Run the agent with automatic retry on rate limits
+        messages = [{"role": "system", "content": system_content}]
+        
+        # Add conversation history (trimmed to MAX_HISTORY_MESSAGES)
+        history = conversations[client_id][-MAX_HISTORY_MESSAGES:]
+        messages.extend(history)
+        
+        # Add current user message
+        messages.append({"role": "user", "content": user_message})
+        
+        # Call OpenRouter API with retry on rate limits
         max_retries = 3
-        response_text = []
+        response_text = ""
         
         for attempt in range(max_retries):
-            response_text = []
             try:
-                async for event in runner.run_async(
-                    user_id=user_id,
-                    session_id=session_id,
-                    new_message=message
-                ):
-                    if hasattr(event, 'content') and event.content:
-                        for part in event.content.parts:
-                            if hasattr(part, 'text') and part.text:
-                                response_text.append(part.text)
-                # Success - break out of retry loop
+                completion = openrouter_client.chat.completions.create(
+                    model=OPENROUTER_MODEL,
+                    messages=messages,
+                    max_tokens=4096,
+                    temperature=0.7,
+                    extra_headers={
+                        "HTTP-Referer": "https://tripwise.app",
+                        "X-Title": "TripWise Travel Planner",
+                    }
+                )
+                
+                response_text = completion.choices[0].message.content or ""
                 break
+                
             except Exception as e:
                 error_msg = str(e)
                 is_rate_limit = (
                     "429" in error_msg
-                    or "RESOURCE_EXHAUSTED" in error_msg
                     or "rate" in error_msg.lower()
                     or "quota" in error_msg.lower()
+                    or "limit" in error_msg.lower()
                 )
                 
                 if is_rate_limit and attempt < max_retries - 1:
@@ -170,27 +188,29 @@ async def chat():
                     continue
                 
                 # Final attempt failed or non-rate-limit error
-                print(f"[!] Agent execution error: {error_msg}")
-                import traceback
-                traceback.print_exc()
+                print(f"[!] OpenRouter API error: {error_msg}")
                 
                 if is_rate_limit:
-                    response_text = ["The AI service is experiencing high demand. Please wait a moment and try again."]
-                elif "model" in error_msg.lower() or "not found" in error_msg.lower():
-                    response_text = ["Sorry, there's an issue with the AI model configuration. Please check the server logs."]
+                    response_text = "The AI service is experiencing high demand. Please wait a moment and try again."
                 elif "api" in error_msg.lower() or "key" in error_msg.lower() or "auth" in error_msg.lower():
-                    response_text = ["API authentication issue. Please check your GOOGLE_API_KEY in the .env file."]
+                    response_text = "API authentication issue. Please check your OPENROUTER_API_KEY in the .env file."
                 else:
-                    response_text = [f"I encountered an issue: {error_msg}. Please try rephrasing your query."]
+                    response_text = f"I encountered an issue: {error_msg}. Please try again."
                 break
         
-        full_response = ''.join(response_text)
+        if not response_text:
+            response_text = "I couldn't generate a response. Please try again with a different query."
         
-        if not full_response:
-            full_response = "I couldn't generate a response. Please try again with a different query."
+        # Save to conversation history
+        conversations[client_id].append({"role": "user", "content": user_message})
+        conversations[client_id].append({"role": "assistant", "content": response_text})
+        
+        # Trim history if too long
+        if len(conversations[client_id]) > MAX_HISTORY_MESSAGES * 2:
+            conversations[client_id] = conversations[client_id][-MAX_HISTORY_MESSAGES:]
         
         return jsonify({
-            'response': full_response,
+            'response': response_text,
             'session_id': client_id
         })
     
@@ -200,29 +220,12 @@ async def chat():
 
 
 @app.route('/api/reset', methods=['POST'])
-@async_route
-async def reset_session():
+def reset_session():
     """Reset the current chat session."""
     try:
         client_id = session.get('client_id')
-        if client_id and client_id in active_sessions:
-            # Get session info before deleting
-            user_id = active_sessions[client_id]['user_id']
-            session_id = active_sessions[client_id]['session_id']
-            
-            # Clean up ADK session (if method exists)
-            try:
-                if hasattr(session_service, 'delete_session'):
-                    await session_service.delete_session(
-                        app_name="travel_planner",
-                        user_id=user_id,
-                        session_id=session_id
-                    )
-            except Exception as cleanup_error:
-                print(f"Session cleanup note: {cleanup_error}")
-            
-            # Remove from active sessions
-            del active_sessions[client_id]
+        if client_id and client_id in conversations:
+            del conversations[client_id]
             session.pop('client_id', None)
         
         return jsonify({'message': 'Session reset successfully', 'status': 'fresh'})
@@ -234,22 +237,27 @@ async def reset_session():
 @app.route('/health')
 def health():
     """Health check endpoint."""
-    return jsonify({'status': 'healthy', 'service': 'AI Travel Planner'})
+    api_key = os.getenv('OPENROUTER_API_KEY', '')
+    has_key = bool(api_key and api_key != 'your_openrouter_api_key_here')
+    return jsonify({
+        'status': 'healthy',
+        'service': 'TripWise Travel Planner',
+        'llm_provider': 'OpenRouter',
+        'model': OPENROUTER_MODEL,
+        'api_key_configured': has_key
+    })
 
 
 if __name__ == '__main__':
     # Check environment variables
-    required_keys = ['GOOGLE_API_KEY', 'AMADEUS_CLIENT_ID', 'AMADEUS_CLIENT_SECRET', 'OPENWEATHER_API_KEY']
-    missing_keys = [key for key in required_keys if not os.getenv(key)]
-    
-    if missing_keys:
-        print("[X] Error: Missing required API keys:")
-        for key in missing_keys:
-            print(f"  - {key}")
-        print("\nPlease check your .env file.")
+    api_key = os.getenv('OPENROUTER_API_KEY', '')
+    if not api_key or api_key == 'your_openrouter_api_key_here':
+        print("[X] Error: Missing OPENROUTER_API_KEY!")
+        print("    Get a free key at: https://openrouter.ai/keys")
+        print("    Then add it to your .env file.")
     else:
-        print("[*] Starting AI Travel Planner Web Server...")
+        print(f"[*] Starting TripWise Travel Planner...")
+        print(f"[*] LLM Provider: OpenRouter ({OPENROUTER_MODEL})")
         port = int(os.getenv('PORT', 5000))
         print(f"[*] Open your browser at: http://localhost:{port}")
         app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
-

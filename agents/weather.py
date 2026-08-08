@@ -1,6 +1,6 @@
 import os
 import aiohttp
-from google.adk.agents import Agent
+
 
 async def get_weather(city: str, forecast_days: int = 1) -> str:
     """
@@ -55,17 +55,3 @@ async def get_weather(city: str, forecast_days: int = 1) -> str:
         return f"Weather API connection issue: {str(e)}"
     except Exception as e:
         return f"An unexpected error occurred: {str(e)}"
-
-
-# Create Weather Agent
-weather_agent = Agent(
-    name="weather_agent",
-    model="gemini-1.5-flash",
-    tools=[get_weather],
-    instruction=(
-        "You provide weather information for travel destinations. "
-        "Use the get_weather tool to fetch real-time weather data. "
-        "For multi-day trips, use forecast_days parameter (max 5). "
-        "Present the information clearly with temperature and conditions."
-    )
-)
