@@ -1,74 +1,52 @@
 """
-Main entry point for the AI Travel Planner application.
+Main CLI entry point for the TripWise AI Travel Planner application using OpenRouter.
 """
-import asyncio
 import os
-import uuid
 from dotenv import load_dotenv
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types
-from agents.root import root_agent
+from openai import OpenAI
+from agents.root import SYSTEM_PROMPT
 
-# Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
-async def main():
-    # 1. Validation
-    if not os.getenv("GOOGLE_API_KEY"):
-        print("❌ Error: GOOGLE_API_KEY not found in .env")
+def main():
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        print("❌ Error: OPENROUTER_API_KEY not found in .env")
         return
 
-    print("✈️  Starting AI Travel Planner (ADK powered)...")
+    print("✈️  Starting TripWise AI Travel Planner (OpenRouter powered)...")
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=api_key,
+    )
     
-    # 2. Initialize the Runner
-    # FIX: Added 'app_name="travel_planner"' which caused the previous error
-    runner = Runner(
-        agent=root_agent,
-        app_name="travel_planner", 
-        session_service=InMemorySessionService()
-    )
-
-    # 3. Session Setup
-    user_id = "user_1"
-    session_id = str(uuid.uuid4())
-
-    # Create the session explicitly before running
-    await runner.session_service.create_session(
-        app_name="travel_planner",
-        user_id=user_id,
-        session_id=session_id
-    )
-
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     print(f"✅ Session Started. Type 'quit' to exit.")
 
-    # 4. Main Chat Loop
     while True:
         try:
-            user_text = input("\nYou: ")
+            user_text = input("\nYou: ").strip()
+            if not user_text:
+                continue
             if user_text.lower() in ["quit", "exit"]:
                 print("👋 Safe travels!")
                 break
 
-            message = types.Content(
-                role="user",
-                parts=[types.Part(text=user_text)]
+            messages.append({"role": "user", "content": user_text})
+            print("🤖 TripWise:", end=" ", flush=True)
+
+            response = client.chat.completions.create(
+                model=os.getenv("OPENROUTER_MODEL", "openrouter/auto"),
+                messages=messages,
+                extra_headers={
+                    "HTTP-Referer": "https://tripwise.app",
+                    "X-Title": "TripWise Travel Planner",
+                }
             )
 
-            print("🤖 Agent:", end=" ", flush=True)
-            
-            # Run the agent
-            async for event in runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=message
-            ):
-                # Handle streaming response
-                if hasattr(event, 'content') and event.content:
-                    for part in event.content.parts:
-                        if part.text:
-                            print(part.text, end="", flush=True)
-            print("")
+            reply = response.choices[0].message.content or ""
+            print(reply)
+            messages.append({"role": "assistant", "content": reply})
 
         except KeyboardInterrupt:
             print("\n👋 Force exit.")
@@ -77,4 +55,4 @@ async def main():
             print(f"\n❌ Runtime Error: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

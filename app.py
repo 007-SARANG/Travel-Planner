@@ -2,7 +2,7 @@
 Flask Web Server for AI Travel Planner with REST API endpoints.
 Uses OpenRouter API (OpenAI-compatible) for LLM inference.
 """
-import asyncio
+import os
 import uuid
 import time
 import re
@@ -12,8 +12,6 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from agents.root import SYSTEM_PROMPT
 from agents.weather import get_weather
-import os
-from functools import wraps
 
 # Load environment variables
 load_dotenv(override=True)
@@ -22,17 +20,26 @@ load_dotenv(override=True)
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'travel-planner-secret-key-' + str(uuid.uuid4()))
 app.config['TEMPLATES_AUTO_RELOAD'] = True  # Force template reload
-app.config['DEBUG'] = True  # Enable debug mode
+app.config['DEBUG'] = False
 CORS(app)
 
-# Initialize OpenRouter client (OpenAI-compatible)
-openrouter_client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY", ""),
-)
+# Initialize OpenRouter client lazily (avoids crash if key is missing at import time)
+_openrouter_client = None
+
+def get_openrouter_client():
+    """Get or create the OpenRouter client."""
+    global _openrouter_client
+    if _openrouter_client is None:
+        api_key = os.getenv("OPENROUTER_API_KEY", "")
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY environment variable is not set. Get a free key at https://openrouter.ai/keys")
+        _openrouter_client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
+    return _openrouter_client
 
 # Model to use - "openrouter/auto" auto-routes to best available free model
-# You can also use specific free models like "google/gemma-2-9b-it:free"
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/auto")
 
 # Store active conversations (client_id -> list of messages)
@@ -46,29 +53,8 @@ MIN_REQUEST_INTERVAL = 3  # seconds between requests per client
 MAX_HISTORY_MESSAGES = 20
 
 
-def async_route(f):
-    """Decorator to handle async routes in Flask with proper cleanup."""
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(f(*args, **kwargs))
-        finally:
-            # Cancel all pending tasks to avoid warnings
-            pending = asyncio.all_tasks(loop)
-            for task in pending:
-                task.cancel()
-            # Allow cancelled tasks to complete
-            if pending:
-                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            loop.close()
-    return wrapper
-
-
 def extract_destination(message: str) -> str:
     """Try to extract a destination/city name from the user message."""
-    # Common patterns like "trip to X", "travel to X", "visit X", "weather in X"
     patterns = [
         r'(?:trip|travel|fly|go|visit|holiday|vacation)\s+to\s+([A-Za-z\s]+?)(?:\s+from|\s+on|\s+in|\s+for|\s*[,.]|\s*$)',
         r'(?:weather|climate)\s+(?:in|at|for)\s+([A-Za-z\s]+?)(?:\s+on|\s+in|\s+for|\s*[,.]|\s*$)',
@@ -79,7 +65,6 @@ def extract_destination(message: str) -> str:
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
             city = match.group(1).strip()
-            # Filter out overly long matches or common non-city words
             if 2 <= len(city) <= 30 and city.lower() not in ('the', 'a', 'an', 'my', 'our'):
                 return city
     
@@ -93,11 +78,10 @@ def index():
 
 
 @app.route('/api/chat', methods=['POST'])
-@async_route
-async def chat():
+def chat():
     """Handle chat messages from the frontend."""
     try:
-        data = request.json
+        data = request.json or {}
         user_message = data.get('message', '').strip()
         
         if not user_message:
@@ -131,14 +115,13 @@ async def chat():
         destination = extract_destination(user_message)
         if destination:
             try:
-                weather_data = await get_weather(destination, forecast_days=3)
+                weather_data = get_weather(destination, forecast_days=3)
                 if weather_data and "Error" not in weather_data:
                     weather_context = f"\n\n[WEATHER DATA - Use this in your response]\n{weather_data}"
             except Exception as e:
                 print(f"[!] Weather fetch failed: {e}")
         
         # Build the messages list for OpenRouter
-        # System prompt + weather context
         system_content = SYSTEM_PROMPT
         if weather_context:
             system_content += weather_context
@@ -158,7 +141,8 @@ async def chat():
         
         for attempt in range(max_retries):
             try:
-                completion = openrouter_client.chat.completions.create(
+                client = get_openrouter_client()
+                completion = client.chat.completions.create(
                     model=OPENROUTER_MODEL,
                     messages=messages,
                     max_tokens=4096,
@@ -184,7 +168,7 @@ async def chat():
                 if is_rate_limit and attempt < max_retries - 1:
                     wait_seconds = 2 ** (attempt + 1)  # 2s, 4s, 8s
                     print(f"[!] Rate limited (attempt {attempt + 1}/{max_retries}), retrying in {wait_seconds}s...")
-                    await asyncio.sleep(wait_seconds)
+                    time.sleep(wait_seconds)
                     continue
                 
                 # Final attempt failed or non-rate-limit error
@@ -249,7 +233,6 @@ def health():
 
 
 if __name__ == '__main__':
-    # Check environment variables
     api_key = os.getenv('OPENROUTER_API_KEY', '')
     if not api_key or api_key == 'your_openrouter_api_key_here':
         print("[X] Error: Missing OPENROUTER_API_KEY!")
