@@ -16,7 +16,7 @@ import os
 from functools import wraps
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
 # Initialize Flask app
 app = Flask(__name__)
