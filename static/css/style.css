@@ -2107,11 +2107,33 @@ body {
     box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
 }
 
-/* =================== Dynamic Price Tags =================== */
-.dynamic-price {
-    font-weight: 700;
+/* =================== Markdown Lists =================== */
+.md-list {
+    margin: var(--spacing-xs) 0;
+    padding-left: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.md-list-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    line-height: 1.5;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border-left: 2px solid var(--gold);
+}
+
+.list-bullet {
     color: var(--gold);
-    transition: color 0.3s ease;
+    font-weight: bold;
+    flex-shrink: 0;
 }
 
 

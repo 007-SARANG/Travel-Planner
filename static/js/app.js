@@ -696,21 +696,30 @@ function formatMessage(text) {
         return `<table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
     });
     
-    // Convert headers (remove # and make bold/larger)
+    // Convert headers
     text = text.replace(/^### (.+)$/gm, '<div class="md-h3">$1</div>');
     text = text.replace(/^## (.+)$/gm, '<div class="md-h2">$1</div>');
     text = text.replace(/^# (.+)$/gm, '<div class="md-h1">$1</div>');
     
-    // Convert markdown links [text](url) BEFORE other formatting
+    // Convert markdown links [text](url)
     text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+    // Convert bullet lists (- item or * item) into <ul><li class="md-list-item">
+    text = text.replace(/(?:^|\n)(?:\s*[-*•]\s+.+(?:\n|$))+/g, (match) => {
+        const items = match.trim().split('\n').map(line => {
+            const cleanLine = line.replace(/^\s*[-*•]\s+/, '').trim();
+            return `<li class="md-list-item"><span class="list-bullet">•</span><span>${cleanLine}</span></li>`;
+        }).join('');
+        return `<ul class="md-list">${items}</ul>`;
+    });
     
     // Convert other markdown formatting
     return text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br>')
-        .replace(/(^|\s)(\d+\.\s)/g, '$1<br>$2')
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/(?<!<\/ul>|<\/table>|<\/div>)\n/g, '<br>')
         // Only convert bare URLs (not already in an href)
         .replace(/(?<!href=")(https?:\/\/[^\s<\)]+?)(?=[.,;:!?\s<]|$)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
 }
@@ -1431,25 +1440,44 @@ function transformItineraryTimeline(contentDiv) {
 }
 
 function parseDaySlots(html) {
-    const pattern = /(?:<strong>|<b>|<p>)?\s*(Morning|Afternoon|Evening|Night):?\s*(?:<\/strong>|<\/b>|<\/p>)?/gi;
+    const pattern = /(?:<strong>|<b>|<p>|<li>)?\s*(Morning|Afternoon|Evening|Night):?\s*(?:<\/strong>|<\/b>|<\/p>|<\/li>)?/gi;
     const matches = [...html.matchAll(pattern)];
 
-    if (matches.length === 0) return [];
-
     let slots = [];
-    for (let i = 0; i < matches.length; i++) {
-        const currentMatch = matches[i];
-        const timeName = currentMatch[1];
-        const startIdx = currentMatch.index + currentMatch[0].length;
-        const endIdx = (i + 1 < matches.length) ? matches[i + 1].index : html.length;
 
-        let content = html.substring(startIdx, endIdx).trim();
-        content = content.replace(/^(?::|<br\s*\/?>|\s|-)+/i, '').replace(/(?:<br\s*\/?>|\s)+$/i, '').trim();
+    if (matches.length > 0) {
+        for (let i = 0; i < matches.length; i++) {
+            const currentMatch = matches[i];
+            const timeName = currentMatch[1];
+            const startIdx = currentMatch.index + currentMatch[0].length;
+            const endIdx = (i + 1 < matches.length) ? matches[i + 1].index : html.length;
 
-        if (content) {
-            slots.push({
-                time: timeName,
-                content: content
+            let content = html.substring(startIdx, endIdx).trim();
+            content = content.replace(/^(?::|<br\s*\/?>|\s|-)+/i, '').replace(/(?:<br\s*\/?>|\s)+$/i, '').trim();
+
+            if (content) {
+                slots.push({
+                    time: timeName,
+                    content: content
+                });
+            }
+        }
+    } else {
+        // Fallback: parse <li> or <p> items if explicit keywords are absent
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        const listItems = tempDiv.querySelectorAll('li, p');
+        
+        if (listItems.length > 0) {
+            const times = ['Morning', 'Afternoon', 'Evening', 'Night'];
+            listItems.forEach((item, idx) => {
+                const text = item.innerHTML.trim();
+                if (text && text.length > 5) {
+                    slots.push({
+                        time: times[idx % times.length],
+                        content: text
+                    });
+                }
             });
         }
     }
